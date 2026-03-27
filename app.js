@@ -309,7 +309,7 @@
   }
 
   const SUPERHERO_API_URL = "https://akabab.github.io/superhero-api/api/all.json";
-  const LEADERBOARD_API_URL = "http://localhost:3000";
+  const LEADERBOARD_API_URL = "https://hero-gues-game1.onrender.com";
   const ALLOWED_PUBLISHERS = new Set(["Marvel Comics", "DC Comics"]);
   const MAX_ATTEMPTS = 6;
   const MAX_HERO_COUNT = 150;
