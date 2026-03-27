@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Game Modes Hub</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <header class="hero">
+      <p class="eyebrow">Interactive Mode Selector</p>
+      <h1>Choose your path.</h1>
+      <p class="hero-copy">
+        Prosty szkielet aplikacji webowej z menu glowym i czterema trybami gry.
+      </p>
+      <div class="leaderboard-controls">
+        <label for="nicknameInput">Nickname</label>
+        <input id="nicknameInput" type="text" maxlength="24" placeholder="Wpisz nick">
+      </div>
+      <div class="progress-panel" id="progressPanel"></div>
+      <button class="home-button" id="homeButton" type="button" hidden>
+        Wroc do menu
+      </button>
+    </header>
+
+    <main class="game-layout">
+      <nav class="menu-panel" aria-label="Main menu" id="menuView">
+        <button class="mode-card" type="button" data-mode-id="classic">
+          <span class="mode-card-title">Classic</span>
+          <span class="mode-card-copy">Zgadywanie bohatera na podstawie cech.</span>
+        </button>
+        <button class="mode-card" type="button" data-mode-id="fight">
+          <span class="mode-card-title">Fight</span>
+          <span class="mode-card-copy">Tryb walki z miejscem na statystyki i akcje.</span>
+        </button>
+        <button class="mode-card" type="button" data-mode-id="power">
+          <span class="mode-card-title">Power</span>
+          <span class="mode-card-copy">Panel mocy, ulepszen i efektow specjalnych.</span>
+        </button>
+        <button class="mode-card" type="button" data-mode-id="lore">
+          <span class="mode-card-title">Lore</span>
+          <span class="mode-card-copy">Sekcja fabuly, frakcji i historii swiata.</span>
+        </button>
+        <button class="mode-card" type="button" data-mode-id="daily">
+          <span class="mode-card-title">Daily</span>
+          <span class="mode-card-copy">Jedno wspolne wyzwanie dziennie dla wszystkich.</span>
+        </button>
+      </nav>
+      <section
+        class="content-panel"
+        id="gameContainer"
+        aria-live="polite"
+        aria-label="Game content area"
+      >
+        <div class="placeholder-menu">
+          <div>
+            <div class="mode-badge">Main Menu</div>
+            <h2 class="mode-title">Wybierz tryb gry z panelu po lewej.</h2>
+            <p>
+              Menu i kontener sa renderowane od razu w HTML, a JavaScript przejmuje obsluge
+              przelaczania widokow po zaladowaniu aplikacji.
+            </p>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script defer src="./app.js"></script>
+</body>
+</html>
