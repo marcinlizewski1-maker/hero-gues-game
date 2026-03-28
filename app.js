@@ -612,8 +612,10 @@
     return headers;
   }
 
-  async function fetchLeaderboard() {
-    const response = await fetch(API_BASE_URL + "/leaderboard");
+  async function fetchLeaderboard(token) {
+    const response = await fetch(API_BASE_URL + "/leaderboard", {
+      headers: getAuthHeaders(token)
+    });
 
     if (!response.ok) {
       throw new Error("Nie udalo sie pobrac leaderboardu.");
@@ -673,7 +675,7 @@
 
   async function syncUserProgress(token, progress) {
     const response = await fetch(API_BASE_URL + "/me/progress", {
-      method: "POST",
+      method: "PATCH",
       headers: getAuthHeaders(token),
       body: JSON.stringify({
         points: progress.points,
@@ -707,10 +709,10 @@
   }
 
   async function updateAdminPoints(token, userId, delta) {
-    const response = await fetch(API_BASE_URL + "/admin/points", {
-      method: "POST",
+    const response = await fetch(API_BASE_URL + "/user/" + userId + "/points", {
+      method: "PATCH",
       headers: getAuthHeaders(token),
-      body: JSON.stringify({ userId: userId, delta: delta })
+      body: JSON.stringify({ delta: delta })
     });
 
     if (!response.ok) {
@@ -724,10 +726,10 @@
   }
 
   async function updateAdminBan(token, userId, banned) {
-    const response = await fetch(API_BASE_URL + "/admin/ban", {
-      method: "POST",
+    const response = await fetch(API_BASE_URL + "/user/" + userId + "/ban", {
+      method: "PATCH",
       headers: getAuthHeaders(token),
-      body: JSON.stringify({ userId: userId, banned: banned })
+      body: JSON.stringify({ banned: banned })
     });
 
     if (!response.ok) {
@@ -2143,10 +2145,10 @@
 
   function renderLeaderboardBlock(leaderboard) {
     if (!leaderboard || !leaderboard.length) {
-      return '<div class="leaderboard-panel"><div class="mode-badge">Leaderboard</div><h3>Top 10 wynikow</h3><p class="mode-meta">Brak wynikow albo backend nie jest jeszcze uruchomiony.</p></div>';
+      return '<div class="leaderboard-panel"><div class="mode-badge">Leaderboard</div><h3>Top Players</h3><p class="mode-meta">Zaloguj sie, aby pobrac ranking z zabezpieczonego backendu.</p></div>';
     }
 
-    return '<div class="leaderboard-panel"><div class="mode-badge">Leaderboard</div><h3>Top 10 wynikow</h3><div class="leaderboard-list">' +
+    return '<div class="leaderboard-panel"><div class="mode-badge">Leaderboard</div><h3>Top Players</h3><div class="leaderboard-list">' +
       leaderboard.map(function (entry, index) {
         return '<article class="leaderboard-row"><strong>#' + (index + 1) + '</strong><span>' + entry.nickname + '</span><span>' + entry.points + ' pkt</span><span>streak ' + entry.streak + '</span></article>';
       }).join("") +
@@ -2811,7 +2813,7 @@
   }
 
   function refreshLeaderboard() {
-    fetchLeaderboard()
+    fetchLeaderboard(store.getState().authToken)
       .then(function (leaderboard) {
         store.setState({ leaderboard: leaderboard });
       })
