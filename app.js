@@ -87,6 +87,39 @@
     }
   ];
 
+  const SEO_CONFIG = {
+    home: {
+      title: "HeroGuess - Quiz o bohaterach Marvel i DC",
+      description: "Nowoczesna gra webowa z trybami Classic, Fight, Power, Lore i Daily Challenge dla fanow Marvel i DC.",
+      path: "/"
+    },
+    classic: {
+      title: "Classic - zgadywanie bohatera | HeroGuess",
+      description: "Tryb Classic w HeroGuess: zgaduj bohaterow Marvel i DC po cechach, porownaniach i wskazowkach.",
+      path: "/?mode=classic"
+    },
+    fight: {
+      title: "Fight - pojedynki bohaterow | HeroGuess",
+      description: "Tryb Fight w HeroGuess: porownuj statystyki superbohaterow i wybieraj zwyciezce starcia.",
+      path: "/?mode=fight"
+    },
+    power: {
+      title: "Power - rozpoznaj bohatera po mocy | HeroGuess",
+      description: "Tryb Power w HeroGuess: odgaduj bohatera Marvel lub DC po opisach mocy i odkrywanych wskazowkach.",
+      path: "/?mode=power"
+    },
+    lore: {
+      title: "Lore - zgadywanie po fabule | HeroGuess",
+      description: "Tryb Lore w HeroGuess: odkrywaj fabularne wskazowki i odgaduj bohatera po historii i tle postaci.",
+      path: "/?mode=lore"
+    },
+    daily: {
+      title: "Daily Challenge - bohater dnia | HeroGuess",
+      description: "Daily Challenge w HeroGuess: jeden wspolny bohater dnia, jedna runda i to samo wyzwanie dla wszystkich graczy.",
+      path: "/?mode=daily"
+    }
+  };
+
   const popularHeroNames = new Set([
     "Batman", "Superman", "Wonder Woman", "Flash", "Green Lantern", "Aquaman", "Cyborg",
     "Robin", "Nightwing", "Batgirl", "Catwoman", "Harley Quinn", "Joker", "Lex Luthor",
@@ -327,6 +360,19 @@
 
   function normalizeValue(value) {
     return String(value || "").trim().toLowerCase();
+  }
+
+  function trackEvent(name, params) {
+    const safeParams = params || {};
+
+    if (typeof gtag === "function") {
+      gtag("event", name, {
+        event_category: "game",
+        ...safeParams
+      });
+    }
+
+    console.log("Event sent:", name, safeParams);
   }
 
   function clamp(value, min, max) {
@@ -1926,6 +1972,44 @@
     container.innerHTML = '<div class="placeholder-menu"><div><div class="mode-badge">Main Menu</div><h2 class="mode-title">Wybierz tryb gry z panelu po lewej.</h2><p>Kazdy przycisk otwiera osobny widok w tym samym kontenerze.</p>' + renderLeaderboardBlock(leaderboard) + '</div></div>';
   }
 
+  function getModeFromUrl() {
+    const params = new URLSearchParams(window.location.search);
+    const mode = params.get("mode");
+
+    return gameModes.some(function (item) {
+      return item.id === mode;
+    }) ? mode : null;
+  }
+
+  function applySeo(modeId) {
+    const key = modeId || "home";
+    const config = SEO_CONFIG[key] || SEO_CONFIG.home;
+    const descriptionTag = document.querySelector('meta[name="description"]');
+    const canonicalLink = document.querySelector("#canonicalLink");
+
+    document.title = config.title;
+
+    if (descriptionTag) {
+      descriptionTag.setAttribute("content", config.description);
+    }
+
+    if (canonicalLink) {
+      canonicalLink.setAttribute("href", "https://hero-gues-game.vercel.app" + config.path);
+    }
+  }
+
+  function syncRoute(modeId) {
+    const config = SEO_CONFIG[modeId || "home"] || SEO_CONFIG.home;
+    const nextUrl = config.path;
+    const currentUrl = window.location.pathname + window.location.search;
+
+    if (currentUrl !== nextUrl) {
+      window.history.replaceState({}, "", nextUrl);
+    }
+
+    applySeo(modeId);
+  }
+
   function renderMode(container, mode, onBack) {
     container.innerHTML = '<div class="content-grid"><div class="content-header"><div><div class="mode-badge">' + mode.badge + '</div><h2 class="mode-title">' + mode.label + '</h2></div><button class="action-button" type="button" id="modeBackButton">Back to menu</button></div><p class="mode-description">' + mode.description + '</p><section class="status-strip">' + createStats(mode.stats) + '</section><section class="feature-grid">' + createFeatureCards(mode.features) + "</section></div>";
     container.querySelector("#modeBackButton").addEventListener("click", onBack);
@@ -2302,8 +2386,20 @@
   }
 
   function finalizeProgress(result) {
+    const awardedPoints = calculateAwardedPoints(result);
     const updatedProgress = progressionManager.recordGame(result);
     syncProgressState(updatedProgress);
+
+    if (result.won) {
+      trackEvent("win", {
+        score: awardedPoints,
+        mode: result.mode
+      });
+    } else {
+      trackEvent("lose", {
+        mode: result.mode
+      });
+    }
 
     postLeaderboardScore({
       nickname: store.getState().nickname,
@@ -2321,10 +2417,13 @@
       powerGame.dispose();
     }
 
+    syncRoute(null);
     store.setState({ activeView: "menu", activeModeId: null });
   }
 
-  function openMode(modeId) {
+  function openMode(modeId, options) {
+    const settings = options || {};
+
     if (modeId === "classic") {
       const heroCollection = store.getState().heroCollection;
       if (heroCollection && heroCollection.heroes.length) {
@@ -2368,6 +2467,12 @@
       }
     }
 
+    if (!settings.skipTracking) {
+      trackEvent("start_game", { mode: modeId });
+      trackEvent("select_mode", { mode: modeId });
+    }
+
+    syncRoute(modeId);
     store.setState({ activeView: "mode", activeModeId: modeId });
   }
 
@@ -2402,6 +2507,7 @@
 
   function restartClassicMode() {
     if (classicGame) {
+      trackEvent("restart", { mode: "classic" });
       classicProgressRecorded = false;
       classicGame.resetGame();
       updateApp(store.getState());
@@ -2422,6 +2528,7 @@
       return;
     }
 
+    trackEvent("restart", { mode: "fight" });
     fightGame.resetRound();
     updateApp(store.getState());
   }
@@ -2461,6 +2568,7 @@
       return;
     }
 
+    trackEvent("restart", { mode: "power" });
     powerProgressRecorded = false;
     powerGame.resetRound();
     updateApp(store.getState());
@@ -2529,6 +2637,7 @@
       return;
     }
 
+    trackEvent("restart", { mode: "lore" });
     loreProgressRecorded = false;
     loreGame.resetRound();
     updateApp(store.getState());
@@ -2542,6 +2651,10 @@
     const nextState = dailyGame.submitGuess(guess);
 
     if (nextState.locked && nextState.status === "won") {
+      trackEvent("win", {
+        score: 0,
+        mode: "daily"
+      });
       const updatedProgress = progressionManager.completeDailyChallenge({
         won: true,
         attemptsUsed: nextState.attemptsUsed,
@@ -2549,6 +2662,9 @@
       });
       syncProgressState(updatedProgress);
     } else if (nextState.locked && nextState.status === "lost") {
+      trackEvent("lose", {
+        mode: "daily"
+      });
       const updatedProgress = progressionManager.completeDailyChallenge({
         won: false,
         attemptsUsed: nextState.maxAttempts,
@@ -2566,6 +2682,7 @@
     nicknameInput.value = state.nickname;
 
     if (state.activeView === "menu") {
+      applySeo(null);
       homeButton.hidden = true;
       renderHome(gameContainer, state.leaderboard);
       return;
@@ -2580,6 +2697,7 @@
       return;
     }
 
+    applySeo(selectedMode.id);
     homeButton.hidden = false;
 
     if (selectedMode.id === "classic") {
@@ -2691,6 +2809,7 @@
   store.subscribe(updateApp);
   updateApp(store.getState());
   refreshLeaderboard();
+  applySeo(getModeFromUrl());
 
   loadSuperheroes()
     .then(function (heroCollection) {
@@ -2700,6 +2819,11 @@
         dataStatus: "ready",
         progress: syncedProgress
       });
+
+      const initialMode = getModeFromUrl();
+      if (initialMode) {
+        openMode(initialMode, { skipTracking: true });
+      }
     })
     .catch(function (error) {
       console.error("Superhero data load failed:", error);
