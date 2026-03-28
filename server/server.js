@@ -7,6 +7,8 @@ const path = require("path");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+const APP_BASE_URL =
+  process.env.APP_BASE_URL || "https://hero-gues-game1.onrender.com";
 const MONGODB_URI =
   process.env.MONGODB_URI ||
   "mongodb+srv://marcinlizewski1_db_user:L3SgCxQXEvs5pyXn@heroguess.hmuwj1b.mongodb.net/?appName=HeroGuess";
@@ -20,7 +22,12 @@ const MONGOOSE_CONNECT_OPTIONS = {
 const DB_RETRY_DELAY_MS = 15000;
 let isDatabaseReady = false;
 
-app.use(cors());
+app.use(
+  cors({
+    origin: true,
+    credentials: true
+  })
+);
 app.use(express.json());
 
 const userSchema = new mongoose.Schema(
@@ -58,14 +65,23 @@ mongoose.connection.on("error", (error) => {
 
 function sanitizeUser(user) {
   return {
-    id: user._id,
+    id: String(user._id),
     nickname: user.nickname,
     email: user.email,
     points: user.points,
     streak: user.streak,
     banned: user.banned,
     role: user.role,
-    createdAt: user.createdAt
+    createdAt: user.createdAt instanceof Date ? user.createdAt.toISOString() : user.createdAt
+  };
+}
+
+function sanitizePublicUser(user) {
+  return {
+    id: String(user._id),
+    nickname: user.nickname,
+    points: user.points,
+    streak: user.streak
   };
 }
 
@@ -168,7 +184,8 @@ async function ensureAdminAccount() {
 app.get("/health", (_req, res) => {
   return res.json({
     ok: true,
-    database: isDatabaseReady ? "connected" : "disconnected"
+    database: isDatabaseReady ? "connected" : "disconnected",
+    baseUrl: APP_BASE_URL
   });
 });
 
@@ -249,9 +266,10 @@ app.get("/leaderboard", requireDatabase, authMiddleware, async (_req, res) => {
     const users = await User.find({ banned: false })
       .sort({ points: -1, streak: -1, createdAt: 1 })
       .limit(50)
-      .select("nickname points streak");
+      .select("nickname points streak")
+      .lean();
 
-    return res.json(users);
+    return res.json(users.map(sanitizePublicUser));
   } catch (error) {
     console.error("Leaderboard failed:", error);
     return res.status(500).json({ error: "Nie udalo sie pobrac leaderboardu." });
@@ -289,9 +307,10 @@ app.get("/admin/users", requireDatabase, authMiddleware, adminOnly, async (_req,
   try {
     const users = await User.find({})
       .sort({ createdAt: -1 })
-      .select("nickname email points streak createdAt banned role");
+      .select("nickname email points streak createdAt banned role")
+      .lean();
 
-    return res.json(users);
+    return res.json(users.map(sanitizeUser));
   } catch (error) {
     console.error("Admin users failed:", error);
     return res.status(500).json({ error: "Nie udalo sie pobrac listy uzytkownikow." });
@@ -388,6 +407,6 @@ async function connectToDatabase() {
 }
 
 app.listen(PORT, () => {
-  console.log("Hero Guess backend listening on http://localhost:" + PORT);
+  console.log("Hero Guess backend listening on " + APP_BASE_URL);
   connectToDatabase();
 });
