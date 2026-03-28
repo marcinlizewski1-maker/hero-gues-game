@@ -385,7 +385,7 @@ app.listen(PORT, () => console.log(`Server działa na porcie ${PORT}`));(functio
   }
 
   const SUPERHERO_API_URL = "https://akabab.github.io/superhero-api/api/all.json";
-const API_BASE_URL = "https://hero-guess-backend.onrender.com";
+  const API_BASE_URL = window.HEROGUESS_API_URL || (window.location.protocol.indexOf("http") === 0 ? window.location.origin : "http://localhost:3000");
   const ALLOWED_PUBLISHERS = new Set(["Marvel Comics", "DC Comics"]);
   const MAX_ATTEMPTS = 6;
   const MAX_HERO_COUNT = 150;
