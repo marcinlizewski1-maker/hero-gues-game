@@ -39,14 +39,13 @@ async function connectDB() {
 connectDB();
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Server działa na porcie ${PORT}`));const express = require("express");
+app.listen(PORT, () => console.log(`Server działa na porcie ${PORT}`));
 const cors = require("cors");
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 const mongoose = require("mongoose");
 const path = require("path");
 
-const app = express();
 const PORT = process.env.PORT || 3000;
 const MONGODB_URI = process.env.mongodb+srv://marcinlizewski1_db_user:L3SgCxQXEvs5pyXn@heroguess.hmuwj1b.mongodb.net/?appName=HeroGuess;
 const JWT_SECRET = process.env.JWT_SECRET || "hero-guess-dev-secret";
