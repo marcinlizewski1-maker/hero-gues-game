@@ -219,7 +219,7 @@ body::before {
 
 .content-panel {
   padding: 32px;
-  overflow: hidden;
+  overflow: auto;
   position: relative;
 }
 
@@ -265,6 +265,7 @@ body::before {
 .home-screen {
   display: grid;
   gap: 24px;
+  padding-bottom: 12px;
 }
 
 .auth-panel,
@@ -274,6 +275,7 @@ body::before {
   border-radius: var(--radius-lg);
   background: rgba(14, 26, 43, 0.9);
   box-shadow: var(--shadow-soft);
+  animation: fadeUp 260ms ease;
 }
 
 .auth-panel-header,
