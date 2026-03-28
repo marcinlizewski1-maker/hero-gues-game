@@ -704,8 +704,11 @@
   }
 
   function detectPrimaryTeam(hero) {
+    const canonicalName = getCanonicalHeroName(hero);
+    const publisher = normalizeValue(hero.biography && hero.biography.publisher);
     const text = [
-      normalizeValue(hero.name),
+      normalizeValue(canonicalName),
+      publisher,
       normalizeValue(hero.connections && hero.connections.groupAffiliation),
       normalizeValue(hero.biography && (hero.biography.aliases || []).join(" ")),
       normalizeValue(hero.connections && hero.connections.relatives)
@@ -751,7 +754,7 @@
       { team: "Sinister Six", names: ["doctor octopus", "green goblin", "venom", "carnage"] }
     ];
 
-    const normalizedName = normalizeValue(hero.name);
+    const normalizedName = normalizeValue(canonicalName);
     const matchedFallback = nameFallbacks.find(function (rule) {
       return rule.names.includes(normalizedName);
     });
