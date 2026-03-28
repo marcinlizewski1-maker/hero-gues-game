@@ -937,14 +937,28 @@
     return "modern";
   }
 
+  function getCanonicalHeroName(hero) {
+    const publisher = hero.biography && hero.biography.publisher ? hero.biography.publisher : "";
+
+    // W bazie API wystepuja historyczne / zduplikowane nazwy.
+    // Dla wspolczesnego i czytelnego UI rozdzielamy je na kanoniczne wpisy.
+    if (hero.name === "Captain Marvel" && publisher === "DC Comics") {
+      return "Shazam";
+    }
+
+    return hero.name;
+  }
+
   function toHeroRecord(hero) {
     const stats = hero.powerstats || {};
     const primaryTeam = detectPrimaryTeam(hero);
+    const canonicalName = getCanonicalHeroName(hero);
 
     return {
       id: hero.id,
-      name: hero.name,
-      localizedName: getPolishHeroName(hero.name),
+      name: canonicalName,
+      originalName: hero.name,
+      localizedName: getPolishHeroName(canonicalName),
       fullName: hero.biography && hero.biography.fullName ? hero.biography.fullName : "",
       aliases: hero.biography && hero.biography.aliases ? hero.biography.aliases.slice(0, 4) : [],
       occupation: hero.work && hero.work.occupation ? hero.work.occupation : "",
@@ -1010,6 +1024,9 @@
       return [normalizeValue(hero.name), hero];
     }));
     heroes.forEach(function (hero) {
+      if (hero.originalName) {
+        lookup.set(normalizeValue(hero.originalName), hero);
+      }
       lookup.set(normalizeValue(hero.localizedName), hero);
     });
     const state = {
@@ -1420,6 +1437,9 @@
     const lookup = new Map();
     heroes.forEach(function (hero) {
       lookup.set(normalizeValue(hero.name), hero);
+      if (hero.originalName) {
+        lookup.set(normalizeValue(hero.originalName), hero);
+      }
       lookup.set(normalizeValue(hero.localizedName), hero);
     });
 
@@ -1688,6 +1708,9 @@
     const lookup = new Map();
     heroes.forEach(function (hero) {
       lookup.set(normalizeValue(hero.name), hero);
+      if (hero.originalName) {
+        lookup.set(normalizeValue(hero.originalName), hero);
+      }
       lookup.set(normalizeValue(hero.localizedName), hero);
     });
 
@@ -1831,6 +1854,9 @@
     const lookup = new Map();
     heroes.forEach(function (hero) {
       lookup.set(normalizeValue(hero.name), hero);
+      if (hero.originalName) {
+        lookup.set(normalizeValue(hero.originalName), hero);
+      }
       lookup.set(normalizeValue(hero.localizedName), hero);
     });
 
