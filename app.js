@@ -357,6 +357,14 @@
   let classicProgressRecorded = false;
   let powerProgressRecorded = false;
   let loreProgressRecorded = false;
+  const SESSION_TOTAL_QUESTIONS = 10;
+  const modeQuestionProgress = {
+    classic: 1,
+    fight: 1,
+    power: 1,
+    lore: 1,
+    daily: 1
+  };
 
   function normalizeValue(value) {
     return String(value || "").trim().toLowerCase();
@@ -373,6 +381,18 @@
     }
 
     console.log("Event sent:", name, safeParams);
+  }
+
+  function getFeedbackVariant(message, status) {
+    if (status === "won" || (message && message.indexOf("✔️") === 0)) {
+      return "success";
+    }
+
+    if (status === "lost" || (message && message.indexOf("❌") === 0)) {
+      return "danger";
+    }
+
+    return "neutral";
   }
 
   function clamp(value, min, max) {
@@ -1997,8 +2017,56 @@
       '</div></div>';
   }
 
-  function renderHome(container, leaderboard) {
-    container.innerHTML = '<div class="placeholder-menu"><div><div class="mode-badge">Main Menu</div><h2 class="mode-title">Wybierz tryb gry z panelu po lewej.</h2><p>Kazdy przycisk otwiera osobny widok w tym samym kontenerze.</p>' + renderLeaderboardBlock(leaderboard) + '</div></div>';
+  function renderGameMeta(meta) {
+    return '<section class="game-meta-bar">' +
+      '<article class="status-card"><h3>Streak</h3><p class="mode-meta">🔥 Streak: ' + meta.streak + '</p></article>' +
+      '<article class="status-card"><h3>Progress</h3><p class="mode-meta">Question ' + meta.question + ' / ' + meta.totalQuestions + '</p></article>' +
+    '</section>';
+  }
+
+  function renderFeedbackBanner(message, status) {
+    if (!message) {
+      return "";
+    }
+
+    const variant = getFeedbackVariant(message, status);
+
+    return '<div class="feedback-banner feedback-' + variant + '">' +
+      '<strong>' + (variant === "success" ? "Correct!" : variant === "danger" ? "Wrong!" : "Info") + '</strong>' +
+      '<span>' + message + '</span>' +
+    '</div>';
+  }
+
+  function renderInGameLeaderboard(leaderboard) {
+    return '<section class="in-game-leaderboard">' + renderLeaderboardBlock(leaderboard) + '</section>';
+  }
+
+  function renderHome(container, leaderboard, handlers) {
+    container.innerHTML = '<div class="home-screen">' +
+      '<section class="start-hero-card">' +
+        '<div class="mode-badge">HeroGuess</div>' +
+        '<h2 class="start-title">HeroGuess</h2>' +
+        '<p class="start-copy">Guess superheroes from Marvel & DC in seconds</p>' +
+        '<div class="start-actions">' +
+          '<button class="action-button start-game-button" type="button" id="startGameButton">Start Game</button>' +
+          '<button class="action-button secondary-button" type="button" id="leaderboardButton">Leaderboard</button>' +
+        '</div>' +
+        '<div class="home-mode-grid">' +
+          '<button class="mode-card home-mode-card" type="button" data-home-mode="classic"><span class="mode-card-title">Classic</span><span class="mode-card-copy">Guess the hero with trait comparisons.</span></button>' +
+          '<button class="mode-card home-mode-card" type="button" data-home-mode="fight"><span class="mode-card-title">Fight</span><span class="mode-card-copy">Choose the winner in superhero battles.</span></button>' +
+          '<button class="mode-card home-mode-card" type="button" data-home-mode="power"><span class="mode-card-title">Clone Who Are Ya</span><span class="mode-card-copy">Recognize the hero from powers and clues.</span></button>' +
+        '</div>' +
+      '</section>' +
+      '<div id="homeLeaderboardAnchor">' + renderLeaderboardBlock(leaderboard) + '</div>' +
+    '</div>';
+
+    container.querySelector("#startGameButton").addEventListener("click", handlers.onStart);
+    container.querySelector("#leaderboardButton").addEventListener("click", handlers.onLeaderboardOpen);
+    container.querySelectorAll("[data-home-mode]").forEach(function (button) {
+      button.addEventListener("click", function () {
+        handlers.onModeSelect(button.dataset.homeMode);
+      });
+    });
   }
 
   function getModeFromUrl() {
@@ -2068,7 +2136,7 @@
     }).join("");
   }
 
-  function renderClassicGame(container, gameState, handlers) {
+  function renderClassicGame(container, gameState, handlers, meta) {
     const resultLabel = gameState.status === "won" ? "Wygrana" : gameState.status === "lost" ? "Przegrana" : "W toku";
     let resultCopy = gameState.status === "won"
       ? "Trafione. Ukrytym bohaterem byl " + gameState.targetHero.localizedName + "."
@@ -2080,7 +2148,7 @@
       return '<option value="' + name + '"></option>';
     }).join("");
 
-    container.innerHTML = '<div class="content-grid"><div class="content-header"><div><div class="mode-badge">Classic Mode</div><h2 class="mode-title">Zgadnij bohatera</h2></div><button class="action-button" type="button" id="modeBackButton">Back to menu</button></div><section class="classic-panel"><div class="classic-status"><article class="status-card"><h3>Limit prob</h3><p class="mode-meta">' + gameState.remainingAttempts + ' / 6 pozostalo</p></article><article class="status-card"><h3>Wynik</h3><p class="mode-meta">' + resultLabel + '</p></article></div><p class="mode-description">' + resultCopy + '</p><article class="status-card"><h3>Hint po ostatniej probie</h3><p class="mode-meta">' + gameState.narrowingHint + '</p></article><form class="guess-form" id="classicGuessForm"><label class="guess-label" for="heroGuess">Wpisz nazwe bohatera</label><div class="guess-row"><input class="guess-input" id="heroGuess" name="heroGuess" list="heroSuggestions" placeholder="Np. Batman, Spider-Man, Wonder Woman" autocomplete="off" ' + (gameState.status !== "playing" ? "disabled" : "") + '><button class="action-button" type="submit" ' + (gameState.status !== "playing" ? "disabled" : "") + '>Sprawdz</button></div><datalist id="heroSuggestions">' + options + '</datalist></form>' + (gameState.message ? '<p class="form-message">' + gameState.message + '</p>' : "") + '<div class="classic-actions"><button class="action-button" type="button" id="restartClassicButton">Nowa runda</button></div></section><section class="attempts-panel"><div class="attempts-header"><h3>Historia prob</h3><p class="mode-meta">' + (gameState.attempts.length ? "Najnowsza proba jest na gorze." : "Jeszcze nie ma zadnych prob.") + '</p></div><div class="attempts-list">' + (gameState.attempts.length ? createAttemptRows(gameState.attempts) : '<div class="empty-attempts">Czekamy na pierwsza odpowiedz.</div>') + "</div></section></div>";
+    container.innerHTML = '<div class="content-grid">' + renderGameMeta(meta) + '<div class="content-header"><div><div class="mode-badge">Classic Mode</div><h2 class="mode-title">Zgadnij bohatera</h2></div><button class="action-button" type="button" id="modeBackButton">Back to menu</button></div>' + renderFeedbackBanner(gameState.message, gameState.status) + '<section class="classic-panel"><div class="classic-status"><article class="status-card"><h3>Limit prob</h3><p class="mode-meta">' + gameState.remainingAttempts + ' / 6 pozostalo</p></article><article class="status-card"><h3>Wynik</h3><p class="mode-meta">' + resultLabel + '</p></article></div><p class="mode-description">' + resultCopy + '</p><article class="status-card"><h3>Hint po ostatniej probie</h3><p class="mode-meta">' + gameState.narrowingHint + '</p></article><form class="guess-form" id="classicGuessForm"><label class="guess-label" for="heroGuess">Wpisz nazwe bohatera</label><div class="guess-row"><input class="guess-input" id="heroGuess" name="heroGuess" list="heroSuggestions" placeholder="Np. Batman, Spider-Man, Wonder Woman" autocomplete="off" ' + (gameState.status !== "playing" ? "disabled" : "") + '><button class="action-button" type="submit" ' + (gameState.status !== "playing" ? "disabled" : "") + '>Sprawdz</button></div><datalist id="heroSuggestions">' + options + '</datalist></form><div class="classic-actions"><button class="action-button" type="button" id="restartClassicButton">Nowa runda</button></div></section><section class="attempts-panel"><div class="attempts-header"><h3>Historia prob</h3><p class="mode-meta">' + (gameState.attempts.length ? "Najnowsza proba jest na gorze." : "Jeszcze nie ma zadnych prob.") + '</p></div><div class="attempts-list">' + (gameState.attempts.length ? createAttemptRows(gameState.attempts) : '<div class="empty-attempts">Czekamy na pierwsza odpowiedz.</div>') + '</div></section>' + renderInGameLeaderboard(meta.leaderboard) + '</div>';
 
     container.querySelector("#modeBackButton").addEventListener("click", handlers.onBack);
     container.querySelector("#restartClassicButton").addEventListener("click", handlers.onRestart);
@@ -2092,7 +2160,7 @@
     });
   }
 
-  function renderFightGame(container, gameState, handlers) {
+  function renderFightGame(container, gameState, handlers, meta) {
     const fighterCards = gameState.fighters.map(function (hero) {
       const isPicked = gameState.playerChoiceId === hero.id;
       const scoreEntry = gameState.result
@@ -2125,6 +2193,7 @@
       : '<section class="fight-result"><div class="fight-result-banner"><span>Wynik walki</span><strong>Czekamy na Twoj wybor</strong></div><p class="mode-description">Wybierz bohatera, ktory wedlug Ciebie wygra to starcie.</p></section>';
 
     container.innerHTML = '<div class="content-grid">' +
+      renderGameMeta(meta) +
       '<div class="content-header">' +
         '<div><div class="mode-badge">Fight Mode</div><h2 class="mode-title">Pojedynek bohaterow</h2></div>' +
         '<button class="action-button" type="button" id="modeBackButton">Back to menu</button>' +
@@ -2137,6 +2206,7 @@
       '</section>' +
       '<section class="fight-grid">' + fighterCards + '</section>' +
       resultBlock +
+      renderInGameLeaderboard(meta.leaderboard) +
     '</div>';
 
     container.querySelector("#modeBackButton").addEventListener("click", handlers.onBack);
@@ -2183,7 +2253,7 @@
     }).join("");
   }
 
-  function renderLoreGame(container, gameState, handlers) {
+  function renderLoreGame(container, gameState, handlers, meta) {
     const resultCopy = gameState.status === "won"
       ? gameState.message
       : gameState.status === "lost"
@@ -2197,10 +2267,12 @@
       : '<div class="empty-attempts">Pierwsza wskazowka juz czeka.</div>';
 
     container.innerHTML = '<div class="content-grid">' +
+      renderGameMeta(meta) +
       '<div class="content-header">' +
         '<div><div class="mode-badge">Lore Mode</div><h2 class="mode-title">Zgadnij bohatera po fabule</h2></div>' +
         '<button class="action-button" type="button" id="modeBackButton">Back to menu</button>' +
       '</div>' +
+      renderFeedbackBanner(gameState.message, gameState.status) +
       '<section class="classic-panel">' +
         '<div class="classic-status">' +
           '<article class="status-card"><h3>Pozostale proby</h3><p class="mode-meta">' + gameState.remainingAttempts + ' / ' + gameState.maxAttempts + '</p></article>' +
@@ -2227,6 +2299,7 @@
         '<div class="attempts-header"><h3>Historia prob</h3><p class="mode-meta">Po kazdej blednej odpowiedzi odkrywa sie kolejny hint.</p></div>' +
         '<div class="attempts-list">' + attemptsBlock + '</div>' +
       '</section>' +
+      renderInGameLeaderboard(meta.leaderboard) +
     '</div>';
 
     container.querySelector("#modeBackButton").addEventListener("click", handlers.onBack);
@@ -2239,7 +2312,7 @@
     });
   }
 
-  function renderDailyGame(container, gameState, handlers) {
+  function renderDailyGame(container, gameState, handlers, meta) {
     const attemptsBlock = gameState.attempts.length
       ? gameState.attempts.map(function (attempt, index) {
           return '<article class="attempt-card"><div class="attempt-card-header"><h3>' + attempt.guessName + '</h3><span>Proba ' + (gameState.attempts.length - index) + '</span></div><p class="attempt-hint">' + (attempt.isCorrect ? "✔️ Trafiony bohater." : "❌ Bledna odpowiedz.") + '</p></article>';
@@ -2247,10 +2320,12 @@
       : '<div class="empty-attempts">Masz tylko jedno podejscie dziennie do pelnej rundy.</div>';
 
     container.innerHTML = '<div class="content-grid">' +
+      renderGameMeta(meta) +
       '<div class="content-header">' +
         '<div><div class="mode-badge">Daily Challenge</div><h2 class="mode-title">Wspolny bohater dnia</h2></div>' +
         '<button class="action-button" type="button" id="modeBackButton">Back to menu</button>' +
       '</div>' +
+      renderFeedbackBanner(gameState.message, gameState.status) +
       '<section class="classic-panel">' +
         '<div class="classic-status">' +
           '<article class="status-card"><h3>Pozostale proby</h3><p class="mode-meta">' + gameState.remainingAttempts + ' / ' + gameState.maxAttempts + '</p></article>' +
@@ -2275,6 +2350,7 @@
         '<div class="attempts-header"><h3>Historia prob</h3><p class="mode-meta">Po kazdej blednej odpowiedzi odkrywa sie kolejny hint, ale po zakonczeniu rundy wyzwanie blokuje sie do jutra.</p></div>' +
         '<div class="attempts-list">' + attemptsBlock + '</div>' +
       '</section>' +
+      renderInGameLeaderboard(meta.leaderboard) +
     '</div>';
 
     container.querySelector("#modeBackButton").addEventListener("click", handlers.onBack);
@@ -2286,7 +2362,7 @@
     });
   }
 
-  function renderPowerGame(container, gameState, handlers) {
+  function renderPowerGame(container, gameState, handlers, meta) {
     const resultCopy = gameState.status === "won"
       ? "Wygrana. Udalo sie odgadnac bohatera."
       : gameState.status === "lost"
@@ -2298,10 +2374,12 @@
     }).join("");
 
     container.innerHTML = '<div class="content-grid">' +
+      renderGameMeta(meta) +
       '<div class="content-header">' +
         '<div><div class="mode-badge">Power Mode</div><h2 class="mode-title">Rozpoznaj bohatera po statystykach</h2></div>' +
         '<button class="action-button" type="button" id="modeBackButton">Back to menu</button>' +
       '</div>' +
+      renderFeedbackBanner(gameState.message, gameState.status) +
       '<section class="classic-panel">' +
         '<div class="classic-status">' +
           '<article class="status-card"><h3>Poziom</h3><p class="mode-meta">' + gameState.difficultyLabel + '</p></article>' +
@@ -2336,6 +2414,7 @@
         '<div class="attempts-header"><h3>Historia prob</h3><p class="mode-meta">' + (gameState.attempts.length ? "Po bledzie w Medium i Hard odkrywany jest kolejny stat." : "Jeszcze nie ma zadnych prob.") + '</p></div>' +
         '<div class="attempts-list">' + (gameState.attempts.length ? createPowerAttempts(gameState.attempts) : '<div class="empty-attempts">Statystyki czekaja na pierwsza probe.</div>') + '</div>' +
       '</section>' +
+      renderInGameLeaderboard(meta.leaderboard) +
     '</div>';
 
     container.querySelector("#modeBackButton").addEventListener("click", handlers.onBack);
@@ -2404,6 +2483,15 @@
     });
   }
 
+  function getGameMeta(modeId) {
+    return {
+      streak: store.getState().progress ? store.getState().progress.streak : 0,
+      question: modeQuestionProgress[modeId] || 1,
+      totalQuestions: SESSION_TOTAL_QUESTIONS,
+      leaderboard: store.getState().leaderboard || []
+    };
+  }
+
   function refreshLeaderboard() {
     fetchLeaderboard()
       .then(function (leaderboard) {
@@ -2450,8 +2538,27 @@
     store.setState({ activeView: "menu", activeModeId: null });
   }
 
+  function handleStartGame() {
+    trackEvent("start_game");
+    modeQuestionProgress.classic = 1;
+    openMode("classic", { skipTracking: true });
+  }
+
+  function handleLeaderboardOpen() {
+    trackEvent("leaderboard_open");
+    const anchor = document.querySelector("#homeLeaderboardAnchor");
+
+    if (anchor) {
+      anchor.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }
+
   function openMode(modeId, options) {
     const settings = options || {};
+
+    if (!settings.keepProgressCounter) {
+      modeQuestionProgress[modeId] = 1;
+    }
 
     if (modeId === "classic") {
       const heroCollection = store.getState().heroCollection;
@@ -2497,7 +2604,6 @@
     }
 
     if (!settings.skipTracking) {
-      trackEvent("start_game", { mode: modeId });
       trackEvent("select_mode", { mode: modeId });
     }
 
@@ -2538,6 +2644,7 @@
     if (classicGame) {
       trackEvent("restart", { mode: "classic" });
       classicProgressRecorded = false;
+      modeQuestionProgress.classic = Math.min(SESSION_TOTAL_QUESTIONS, modeQuestionProgress.classic + 1);
       classicGame.resetGame();
       updateApp(store.getState());
     }
@@ -2548,7 +2655,15 @@
       return;
     }
 
-    fightGame.chooseWinner(heroId);
+    const nextState = fightGame.chooseWinner(heroId);
+
+    if (nextState.result) {
+      trackEvent(nextState.result.playerPickedWinner ? "win" : "lose", {
+        mode: "fight",
+        score: nextState.result.playerPickedWinner ? Math.round(nextState.result.margin * 10) : 0
+      });
+    }
+
     updateApp(store.getState());
   }
 
@@ -2558,6 +2673,7 @@
     }
 
     trackEvent("restart", { mode: "fight" });
+    modeQuestionProgress.fight = Math.min(SESSION_TOTAL_QUESTIONS, modeQuestionProgress.fight + 1);
     fightGame.resetRound();
     updateApp(store.getState());
   }
@@ -2599,6 +2715,7 @@
 
     trackEvent("restart", { mode: "power" });
     powerProgressRecorded = false;
+    modeQuestionProgress.power = Math.min(SESSION_TOTAL_QUESTIONS, modeQuestionProgress.power + 1);
     powerGame.resetRound();
     updateApp(store.getState());
   }
@@ -2609,6 +2726,7 @@
     }
 
     powerProgressRecorded = false;
+    modeQuestionProgress.power = 1;
     powerGame.setDifficulty(difficulty);
     updateApp(store.getState());
   }
@@ -2668,6 +2786,7 @@
 
     trackEvent("restart", { mode: "lore" });
     loreProgressRecorded = false;
+    modeQuestionProgress.lore = Math.min(SESSION_TOTAL_QUESTIONS, modeQuestionProgress.lore + 1);
     loreGame.resetRound();
     updateApp(store.getState());
   }
@@ -2713,7 +2832,13 @@
     if (state.activeView === "menu") {
       applySeo(null);
       homeButton.hidden = true;
-      renderHome(gameContainer, state.leaderboard);
+      renderHome(gameContainer, state.leaderboard, {
+        onStart: handleStartGame,
+        onLeaderboardOpen: handleLeaderboardOpen,
+        onModeSelect: function (modeId) {
+          openMode(modeId);
+        }
+      });
       return;
     }
 
@@ -2744,7 +2869,7 @@
         onBack: openMenu,
         onRestart: restartClassicMode,
         onGuess: submitClassicGuess
-      });
+      }, getGameMeta("classic"));
       return;
     }
 
@@ -2763,7 +2888,7 @@
         onBack: openMenu,
         onChooseWinner: chooseFightWinner,
         onNextRound: nextFightRound
-      });
+      }, getGameMeta("fight"));
       return;
     }
 
@@ -2785,7 +2910,7 @@
         onChangeDifficulty: changePowerDifficulty,
         onChooseOption: choosePowerOption,
         onToggleTimer: togglePowerTimer
-      });
+      }, getGameMeta("power"));
       return;
     }
 
@@ -2804,7 +2929,7 @@
         onBack: openMenu,
         onGuess: submitLoreGuess,
         onRestart: restartLoreRound
-      });
+      }, getGameMeta("lore"));
       return;
     }
 
@@ -2822,7 +2947,7 @@
       renderDailyGame(gameContainer, dailyGame.getState(), {
         onBack: openMenu,
         onGuess: submitDailyGuess
-      });
+      }, getGameMeta("daily"));
       return;
     }
 
