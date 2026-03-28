@@ -1,4 +1,47 @@
-(function () {
+require('dotenv').config();
+const express = require('express');
+const { MongoClient } = require('mongodb');
+const bcrypt = require('bcrypt');
+const jwt = require('jsonwebtoken');
+
+const app = express();
+app.use(express.json());
+
+const uri = process.env.MONGODB_URI;
+const client = new MongoClient(uri);
+
+async function connectDB() {
+  try {
+    await client.connect();
+    console.log('Połączono z MongoDB Atlas!');
+    global.Users = client.db('heroguess').collection('users');
+
+    // Tworzymy konto admina jeśli nie istnieje
+    const admin = await global.Users.findOne({ role: 'admin' });
+    if (!admin) {
+      const hashedPassword = await bcrypt.hash('Martillos6', 10);
+      await global.Users.insertOne({
+        nickname: 'MarcinYT',
+        email: 'marcin.lizewski2@wp.pl',
+        password: hashedPassword,
+        role: 'admin',
+        points: 0,
+        streak: 0,
+        banned: false,
+        createdAt: new Date()
+      });
+      console.log('Admin MarcinYT utworzony!');
+    }
+
+  } catch (err) {
+    console.error('Błąd połączenia z MongoDB:', err);
+  }
+}
+
+connectDB();
+
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log(`Server działa na porcie ${PORT}`));(function () {
   const gameModes = [
     {
       id: "classic",
@@ -342,7 +385,7 @@
   }
 
   const SUPERHERO_API_URL = "https://akabab.github.io/superhero-api/api/all.json";
-  const API_BASE_URL = window.HEROGUESS_API_URL || (window.location.protocol.indexOf("http") === 0 ? window.location.origin : "http://localhost:3000");
+  const API_BASE_URL = window.HEROGUESS_API_URL || (window.location.protocol.indexOf("http") === 0 ? window.location.origin : "https://hero-gues-game.onrender.com");
   const ALLOWED_PUBLISHERS = new Set(["Marvel Comics", "DC Comics"]);
   const MAX_ATTEMPTS = 6;
   const MAX_HERO_COUNT = 150;
