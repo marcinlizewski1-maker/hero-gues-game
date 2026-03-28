@@ -14,6 +14,11 @@ const JWT_SECRET = process.env.JWT_SECRET || "hero-guess-dev-secret";
 const ADMIN_EMAIL = "marcin.lizewski2@wp.pl";
 const ADMIN_PASSWORD = "Martillos6";
 const ADMIN_NICKNAME = "MarcinYT";
+const MONGOOSE_CONNECT_OPTIONS = {
+  serverSelectionTimeoutMS: 10000
+};
+const DB_RETRY_DELAY_MS = 15000;
+let isDatabaseReady = false;
 
 app.use(cors());
 app.use(express.json());
@@ -35,6 +40,21 @@ const userSchema = new mongoose.Schema(
 );
 
 const User = mongoose.model("User", userSchema);
+
+mongoose.connection.on("connected", () => {
+  isDatabaseReady = true;
+  console.log("MongoDB connection established.");
+});
+
+mongoose.connection.on("disconnected", () => {
+  isDatabaseReady = false;
+  console.warn("MongoDB connection lost.");
+});
+
+mongoose.connection.on("error", (error) => {
+  isDatabaseReady = false;
+  console.error("MongoDB connection error:", error.message);
+});
 
 function sanitizeUser(user) {
   return {
@@ -58,6 +78,16 @@ function createToken(user) {
     JWT_SECRET,
     { expiresIn: "7d" }
   );
+}
+
+function requireDatabase(_req, res, next) {
+  if (!isDatabaseReady) {
+    return res.status(503).json({
+      error: "Baza danych jest chwilowo niedostepna. Sprobuj ponownie za chwile."
+    });
+  }
+
+  return next();
 }
 
 async function authMiddleware(req, res, next) {
@@ -135,7 +165,14 @@ async function ensureAdminAccount() {
   console.log("Admin account created:", ADMIN_EMAIL);
 }
 
-app.post("/register", async (req, res) => {
+app.get("/health", (_req, res) => {
+  return res.json({
+    ok: true,
+    database: isDatabaseReady ? "connected" : "disconnected"
+  });
+});
+
+app.post("/register", requireDatabase, async (req, res) => {
   try {
     const nickname = String(req.body.nickname || "").trim();
     const email = String(req.body.email || "").trim().toLowerCase();
@@ -176,7 +213,7 @@ app.post("/register", async (req, res) => {
   }
 });
 
-app.post("/login", async (req, res) => {
+app.post("/login", requireDatabase, async (req, res) => {
   try {
     const email = String(req.body.email || "").trim().toLowerCase();
     const password = String(req.body.password || "");
@@ -207,7 +244,7 @@ app.post("/login", async (req, res) => {
   }
 });
 
-app.get("/leaderboard", authMiddleware, async (_req, res) => {
+app.get("/leaderboard", requireDatabase, authMiddleware, async (_req, res) => {
   try {
     const users = await User.find({ banned: false })
       .sort({ points: -1, streak: -1, createdAt: 1 })
@@ -221,11 +258,11 @@ app.get("/leaderboard", authMiddleware, async (_req, res) => {
   }
 });
 
-app.get("/me", authMiddleware, async (req, res) => {
+app.get("/me", requireDatabase, authMiddleware, async (req, res) => {
   return res.json(sanitizeUser(req.user));
 });
 
-app.patch("/me/progress", authMiddleware, async (req, res) => {
+app.patch("/me/progress", requireDatabase, authMiddleware, async (req, res) => {
   try {
     const points = Number(req.body.points);
     const streak = Number(req.body.streak);
@@ -248,7 +285,7 @@ app.patch("/me/progress", authMiddleware, async (req, res) => {
   }
 });
 
-app.get("/admin/users", authMiddleware, adminOnly, async (_req, res) => {
+app.get("/admin/users", requireDatabase, authMiddleware, adminOnly, async (_req, res) => {
   try {
     const users = await User.find({})
       .sort({ createdAt: -1 })
@@ -261,7 +298,7 @@ app.get("/admin/users", authMiddleware, adminOnly, async (_req, res) => {
   }
 });
 
-app.patch("/user/:id/points", authMiddleware, adminOnly, async (req, res) => {
+app.patch("/user/:id/points", requireDatabase, authMiddleware, adminOnly, async (req, res) => {
   try {
     const userId = String(req.params.id || "");
     const delta = Number(req.body.delta);
@@ -289,7 +326,7 @@ app.patch("/user/:id/points", authMiddleware, adminOnly, async (req, res) => {
   }
 });
 
-app.patch("/user/:id/ban", authMiddleware, adminOnly, async (req, res) => {
+app.patch("/user/:id/ban", requireDatabase, authMiddleware, adminOnly, async (req, res) => {
   try {
     const userId = String(req.params.id || "");
     const banned = req.body.banned === undefined ? true : Boolean(req.body.banned);
@@ -333,21 +370,24 @@ app.get("*", (req, res) => {
   return res.sendFile(path.join(__dirname, "..", "index.html"));
 });
 
-async function start() {
-  await mongoose.connect(MONGODB_URI);
-
+async function connectToDatabase() {
   const hostMatch = MONGODB_URI.match(/@([^/?]+)/);
   const atlasHost = hostMatch ? hostMatch[1] : "MongoDB Atlas";
-  console.log("Connected to MongoDB Atlas:", atlasHost);
+  console.log("Connecting to MongoDB Atlas:", atlasHost);
 
-  await ensureAdminAccount();
-
-  app.listen(PORT, () => {
-    console.log("Hero Guess backend listening on http://localhost:" + PORT);
-  });
+  try {
+    await mongoose.connect(MONGODB_URI, MONGOOSE_CONNECT_OPTIONS);
+    console.log("Connected to MongoDB Atlas:", atlasHost);
+    await ensureAdminAccount();
+  } catch (error) {
+    isDatabaseReady = false;
+    console.error("Initial MongoDB Atlas connection failed:", error.message);
+    console.error("Most likely cause: Atlas Network Access does not allow Render to connect.");
+    setTimeout(connectToDatabase, DB_RETRY_DELAY_MS);
+  }
 }
 
-start().catch((error) => {
-  console.error("Backend start failed:", error);
-  process.exit(1);
+app.listen(PORT, () => {
+  console.log("Hero Guess backend listening on http://localhost:" + PORT);
+  connectToDatabase();
 });
