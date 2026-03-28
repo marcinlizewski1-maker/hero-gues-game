@@ -114,6 +114,35 @@ body::before {
   background: rgba(7, 17, 31, 0.92);
 }
 
+#accountSummary {
+  margin-top: 16px;
+}
+
+.account-summary-card,
+.account-summary-copy {
+  margin: 0;
+  padding: 14px 18px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: rgba(9, 19, 34, 0.76);
+  color: var(--muted);
+}
+
+.account-summary-card {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+  align-items: center;
+}
+
+.account-summary-card strong {
+  color: var(--text);
+}
+
+.account-summary-copy.is-error {
+  color: var(--danger);
+}
+
 .progress-card {
   padding: 18px 20px;
   border: 1px solid var(--border);
@@ -236,6 +265,101 @@ body::before {
 .home-screen {
   display: grid;
   gap: 24px;
+}
+
+.auth-panel,
+.admin-panel {
+  padding: 24px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: rgba(14, 26, 43, 0.9);
+  box-shadow: var(--shadow-soft);
+}
+
+.auth-panel-header,
+.admin-panel-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 18px;
+}
+
+.auth-panel-header h3,
+.admin-panel h3 {
+  margin: 8px 0 0;
+}
+
+.auth-switch-row,
+.auth-actions-row,
+.admin-user-actions,
+.auth-user-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.auth-form {
+  display: grid;
+  gap: 12px;
+}
+
+.auth-message {
+  margin: 0 0 16px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+}
+
+.auth-message.is-success {
+  color: var(--success);
+  background: rgba(21, 72, 52, 0.46);
+  border-color: rgba(94, 236, 171, 0.34);
+}
+
+.auth-message.is-error {
+  color: var(--danger);
+  background: rgba(88, 26, 40, 0.46);
+  border-color: rgba(255, 125, 138, 0.32);
+}
+
+.admin-users-list {
+  display: grid;
+  gap: 14px;
+}
+
+.admin-user-row {
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: rgba(9, 19, 34, 0.86);
+}
+
+.admin-user-row p,
+.admin-user-stats {
+  margin: 0;
+  color: var(--muted);
+}
+
+.admin-user-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.admin-small-button,
+.admin-ban-button {
+  margin-top: 0;
+  min-height: 46px;
+  padding: 10px 16px;
+}
+
+.admin-ban-button {
+  border-color: rgba(255, 125, 138, 0.36);
+  background: linear-gradient(135deg, rgba(112, 31, 47, 0.78), rgba(64, 17, 27, 0.92));
 }
 
 .start-hero-card {

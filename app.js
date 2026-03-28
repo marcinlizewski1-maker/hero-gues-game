@@ -342,12 +342,14 @@
   }
 
   const SUPERHERO_API_URL = "https://akabab.github.io/superhero-api/api/all.json";
-  const LEADERBOARD_API_URL = "https://hero-gues-game1.onrender.com";
+  const API_BASE_URL = window.HEROGUESS_API_URL || (window.location.protocol.indexOf("http") === 0 ? window.location.origin : "http://localhost:3000");
   const ALLOWED_PUBLISHERS = new Set(["Marvel Comics", "DC Comics"]);
   const MAX_ATTEMPTS = 6;
   const MAX_HERO_COUNT = 150;
   const PROGRESSION_STORAGE_KEY = "marcina-progress-v1";
   const NICKNAME_STORAGE_KEY = "marcina-nickname";
+  const AUTH_TOKEN_STORAGE_KEY = "marcina-auth-token-v1";
+  const AUTH_VIEW_STORAGE_KEY = "marcina-auth-view-v1";
   let heroesCache = null;
   let classicGame = null;
   let fightGame = null;
@@ -453,6 +455,26 @@
 
   function loadNickname() {
     return localStorage.getItem(NICKNAME_STORAGE_KEY) || "Guest";
+  }
+
+  function loadAuthToken() {
+    return localStorage.getItem(AUTH_TOKEN_STORAGE_KEY) || "";
+  }
+
+  function saveAuthToken(token) {
+    if (token) {
+      localStorage.setItem(AUTH_TOKEN_STORAGE_KEY, token);
+    } else {
+      localStorage.removeItem(AUTH_TOKEN_STORAGE_KEY);
+    }
+  }
+
+  function loadAuthView() {
+    return localStorage.getItem(AUTH_VIEW_STORAGE_KEY) || "login";
+  }
+
+  function saveAuthView(view) {
+    localStorage.setItem(AUTH_VIEW_STORAGE_KEY, view);
   }
 
   function saveNickname(nickname) {
@@ -578,8 +600,20 @@
     };
   }
 
+  function getAuthHeaders(token) {
+    const headers = {
+      "Content-Type": "application/json"
+    };
+
+    if (token) {
+      headers.Authorization = "Bearer " + token;
+    }
+
+    return headers;
+  }
+
   async function fetchLeaderboard() {
-    const response = await fetch(LEADERBOARD_API_URL + "/leaderboard");
+    const response = await fetch(API_BASE_URL + "/leaderboard");
 
     if (!response.ok) {
       throw new Error("Nie udalo sie pobrac leaderboardu.");
@@ -588,17 +622,119 @@
     return response.json();
   }
 
-  async function postLeaderboardScore(payload) {
-    const response = await fetch(LEADERBOARD_API_URL + "/score", {
+  async function loginUser(payload) {
+    const response = await fetch(API_BASE_URL + "/login", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
+      headers: getAuthHeaders(),
       body: JSON.stringify(payload)
     });
 
     if (!response.ok) {
-      throw new Error("Nie udalo sie zapisac wyniku.");
+      const data = await response.json().catch(function () {
+        return {};
+      });
+      throw new Error(data.error || "Nie udalo sie zalogowac.");
+    }
+
+    return response.json();
+  }
+
+  async function registerUser(payload) {
+    const response = await fetch(API_BASE_URL + "/register", {
+      method: "POST",
+      headers: getAuthHeaders(),
+      body: JSON.stringify(payload)
+    });
+
+    if (!response.ok) {
+      const data = await response.json().catch(function () {
+        return {};
+      });
+      throw new Error(data.error || "Nie udalo sie zarejestrowac.");
+    }
+
+    return response.json();
+  }
+
+  async function fetchCurrentUser(token) {
+    const response = await fetch(API_BASE_URL + "/me", {
+      headers: getAuthHeaders(token)
+    });
+
+    if (!response.ok) {
+      const data = await response.json().catch(function () {
+        return {};
+      });
+      throw new Error(data.error || "Nie udalo sie pobrac profilu.");
+    }
+
+    return response.json();
+  }
+
+  async function syncUserProgress(token, progress) {
+    const response = await fetch(API_BASE_URL + "/me/progress", {
+      method: "POST",
+      headers: getAuthHeaders(token),
+      body: JSON.stringify({
+        points: progress.points,
+        streak: progress.streak
+      })
+    });
+
+    if (!response.ok) {
+      const data = await response.json().catch(function () {
+        return {};
+      });
+      throw new Error(data.error || "Nie udalo sie zapisac progresu.");
+    }
+
+    return response.json();
+  }
+
+  async function fetchAdminUsers(token) {
+    const response = await fetch(API_BASE_URL + "/admin/users", {
+      headers: getAuthHeaders(token)
+    });
+
+    if (!response.ok) {
+      const data = await response.json().catch(function () {
+        return {};
+      });
+      throw new Error(data.error || "Nie udalo sie pobrac listy uzytkownikow.");
+    }
+
+    return response.json();
+  }
+
+  async function updateAdminPoints(token, userId, delta) {
+    const response = await fetch(API_BASE_URL + "/admin/points", {
+      method: "POST",
+      headers: getAuthHeaders(token),
+      body: JSON.stringify({ userId: userId, delta: delta })
+    });
+
+    if (!response.ok) {
+      const data = await response.json().catch(function () {
+        return {};
+      });
+      throw new Error(data.error || "Nie udalo sie zmienic punktow.");
+    }
+
+    return response.json();
+  }
+
+  async function updateAdminBan(token, userId, banned) {
+    const response = await fetch(API_BASE_URL + "/admin/ban", {
+      method: "POST",
+      headers: getAuthHeaders(token),
+      body: JSON.stringify({ userId: userId, banned: banned })
+    });
+
+    if (!response.ok) {
+      const data = await response.json().catch(function () {
+        return {};
+      });
+      throw new Error(data.error || "Nie udalo sie zbanowac uzytkownika.");
     }
 
     return response.json();
@@ -2041,7 +2177,67 @@
     return '<section class="in-game-leaderboard">' + renderLeaderboardBlock(leaderboard) + '</section>';
   }
 
-  function renderHome(container, leaderboard, handlers) {
+  function renderAuthSection(authState) {
+    const user = authState.currentUser;
+    const statusMessage = authState.message
+      ? '<p class="auth-message ' + (authState.status === "error" ? "is-error" : "is-success") + '">' + authState.message + '</p>'
+      : "";
+
+    if (user) {
+      return '<section class="auth-panel">' +
+        '<div class="auth-panel-header"><div><div class="mode-badge">Konto</div><h3>Zalogowano jako ' + user.nickname + '</h3></div><p class="mode-meta">' + user.email + ' • ' + user.role + '</p></div>' +
+        statusMessage +
+        '<div class="auth-user-stats">' +
+          '<article class="status-card"><h3>Punkty</h3><p class="mode-meta">' + user.points + '</p></article>' +
+          '<article class="status-card"><h3>Streak</h3><p class="mode-meta">' + user.streak + '</p></article>' +
+        '</div>' +
+        '<div class="auth-actions-row">' +
+          '<button class="action-button secondary-button" type="button" id="logoutButton">Wyloguj</button>' +
+        '</div>' +
+      '</section>';
+    }
+
+    const isRegister = authState.view === "register";
+
+    return '<section class="auth-panel">' +
+      '<div class="auth-panel-header"><div><div class="mode-badge">Konto</div><h3>' + (isRegister ? "Utworz konto" : "Zaloguj sie") + '</h3></div><p class="mode-meta">JWT trafia do localStorage, a progres zapisuje sie w MongoDB.</p></div>' +
+      '<div class="auth-switch-row">' +
+        '<button class="action-button ' + (!isRegister ? "" : "secondary-button") + '" type="button" data-auth-view="login">Logowanie</button>' +
+        '<button class="action-button ' + (isRegister ? "" : "secondary-button") + '" type="button" data-auth-view="register">Rejestracja</button>' +
+      '</div>' +
+      statusMessage +
+      '<form class="auth-form" id="' + (isRegister ? "registerForm" : "loginForm") + '">' +
+        (isRegister ? '<label class="guess-label" for="registerNickname">Nickname</label><input class="guess-input" id="registerNickname" name="nickname" maxlength="24" placeholder="Twoj nick">' : "") +
+        '<label class="guess-label" for="' + (isRegister ? "registerEmail" : "loginEmail") + '">Email</label>' +
+        '<input class="guess-input" id="' + (isRegister ? "registerEmail" : "loginEmail") + '" name="email" type="email" placeholder="email@adres.pl">' +
+        '<label class="guess-label" for="' + (isRegister ? "registerPassword" : "loginPassword") + '">Haslo</label>' +
+        '<input class="guess-input" id="' + (isRegister ? "registerPassword" : "loginPassword") + '" name="password" type="password" placeholder="Haslo">' +
+        '<button class="action-button" type="submit">' + (isRegister ? "Zarejestruj" : "Zaloguj") + '</button>' +
+      '</form>' +
+    '</section>';
+  }
+
+  function renderAdminSection(adminUsers) {
+    if (!adminUsers || !adminUsers.length) {
+      return '<section class="admin-panel"><div class="mode-badge">Admin</div><h3>Panel admina</h3><p class="mode-meta">Lista uzytkownikow pojawi sie po zaladowaniu danych.</p></section>';
+    }
+
+    return '<section class="admin-panel"><div class="admin-panel-head"><div><div class="mode-badge">Admin</div><h3>Panel admina</h3></div><button class="action-button secondary-button" type="button" id="refreshAdminUsersButton">Odswiez</button></div><div class="admin-users-list">' +
+      adminUsers.map(function (user) {
+        return '<article class="admin-user-row">' +
+          '<div><strong>' + user.nickname + '</strong><p>' + user.email + ' • ' + user.role + (user.banned ? ' • zbanowany' : "") + '</p></div>' +
+          '<div class="admin-user-stats"><span>' + user.points + ' pkt</span><span>streak ' + user.streak + '</span></div>' +
+          '<div class="admin-user-actions">' +
+            '<button class="action-button admin-small-button" type="button" data-admin-points="' + user._id + '" data-delta="50">+50</button>' +
+            '<button class="action-button secondary-button admin-small-button" type="button" data-admin-points="' + user._id + '" data-delta="-50">-50</button>' +
+            '<button class="action-button admin-ban-button" type="button" data-admin-ban="' + user._id + '" data-banned="' + (!user.banned) + '">' + (user.banned ? "Odbanuj" : "Ban") + '</button>' +
+          '</div>' +
+        '</article>';
+      }).join("") +
+    '</div></section>';
+  }
+
+  function renderHome(container, leaderboard, authState, handlers) {
     container.innerHTML = '<div class="home-screen">' +
       '<section class="start-hero-card">' +
         '<div class="mode-badge">HeroGuess</div>' +
@@ -2057,6 +2253,8 @@
           '<button class="mode-card home-mode-card" type="button" data-home-mode="power"><span class="mode-card-title">Clone Who Are Ya</span><span class="mode-card-copy">Recognize the hero from powers and clues.</span></button>' +
         '</div>' +
       '</section>' +
+      renderAuthSection(authState) +
+      (authState.currentUser && authState.currentUser.role === "admin" ? renderAdminSection(authState.adminUsers) : "") +
       '<div id="homeLeaderboardAnchor">' + renderLeaderboardBlock(leaderboard) + '</div>' +
     '</div>';
 
@@ -2065,6 +2263,57 @@
     container.querySelectorAll("[data-home-mode]").forEach(function (button) {
       button.addEventListener("click", function () {
         handlers.onModeSelect(button.dataset.homeMode);
+      });
+    });
+
+    container.querySelectorAll("[data-auth-view]").forEach(function (button) {
+      button.addEventListener("click", function () {
+        handlers.onAuthViewChange(button.dataset.authView);
+      });
+    });
+
+    const loginForm = container.querySelector("#loginForm");
+    if (loginForm) {
+      loginForm.addEventListener("submit", function (event) {
+        event.preventDefault();
+        handlers.onLogin({
+          email: loginForm.email.value,
+          password: loginForm.password.value
+        });
+      });
+    }
+
+    const registerForm = container.querySelector("#registerForm");
+    if (registerForm) {
+      registerForm.addEventListener("submit", function (event) {
+        event.preventDefault();
+        handlers.onRegister({
+          nickname: registerForm.nickname.value,
+          email: registerForm.email.value,
+          password: registerForm.password.value
+        });
+      });
+    }
+
+    const logoutButton = container.querySelector("#logoutButton");
+    if (logoutButton) {
+      logoutButton.addEventListener("click", handlers.onLogout);
+    }
+
+    const refreshAdminUsersButton = container.querySelector("#refreshAdminUsersButton");
+    if (refreshAdminUsersButton) {
+      refreshAdminUsersButton.addEventListener("click", handlers.onAdminRefresh);
+    }
+
+    container.querySelectorAll("[data-admin-points]").forEach(function (button) {
+      button.addEventListener("click", function () {
+        handlers.onAdminPoints(button.dataset.adminPoints, Number(button.dataset.delta));
+      });
+    });
+
+    container.querySelectorAll("[data-admin-ban]").forEach(function (button) {
+      button.addEventListener("click", function () {
+        handlers.onAdminBan(button.dataset.adminBan, button.dataset.banned === "true");
       });
     });
   }
@@ -2449,7 +2698,13 @@
     dataStatus: "loading",
     progress: loadSavedProgress(),
     leaderboard: [],
-    nickname: loadNickname()
+    nickname: loadNickname(),
+    authToken: loadAuthToken(),
+    authView: loadAuthView(),
+    authStatus: "idle",
+    authMessage: "",
+    currentUser: null,
+    adminUsers: []
   });
 
   const menuView = document.querySelector("#menuView");
@@ -2457,6 +2712,7 @@
   const homeButton = document.querySelector("#homeButton");
   const progressPanel = document.querySelector("#progressPanel");
   const nicknameInput = document.querySelector("#nicknameInput");
+  const accountSummary = document.querySelector("#accountSummary");
   const progressionManager = createProgressionManager();
 
   function renderProgressPanel(progress) {
@@ -2477,10 +2733,72 @@
     }).join("");
   }
 
+  function renderAccountSummary(user, message, status) {
+    if (!accountSummary) {
+      return;
+    }
+
+    if (!user && !message) {
+      accountSummary.innerHTML = '<p class="account-summary-copy">Mozesz grac jako Guest albo zalogowac sie, aby zapisywac punkty i streak w bazie danych.</p>';
+      return;
+    }
+
+    accountSummary.innerHTML = user
+      ? '<div class="account-summary-card"><strong>' + user.nickname + '</strong><span>' + user.role + ' • ' + user.email + '</span></div>'
+      : '<p class="account-summary-copy ' + (status === "error" ? "is-error" : "") + '">' + message + '</p>';
+  }
+
   function syncProgressState(nextProgress) {
     store.setState({
       progress: nextProgress
     });
+  }
+
+  function mergeProgressWithUser(baseProgress, user) {
+    return {
+      streak: user && typeof user.streak === "number" ? user.streak : baseProgress.streak,
+      points: user && typeof user.points === "number" ? user.points : baseProgress.points,
+      history: Array.isArray(baseProgress.history) ? baseProgress.history : [],
+      dailyChallenge: baseProgress.dailyChallenge || null,
+      dailyChallengeResult: baseProgress.dailyChallengeResult || null
+    };
+  }
+
+  async function syncCurrentUserProgress(nextProgress) {
+    const state = store.getState();
+
+    if (!state.authToken || !state.currentUser) {
+      return;
+    }
+
+    try {
+      const response = await syncUserProgress(state.authToken, nextProgress);
+      const mergedProgress = mergeProgressWithUser(nextProgress, response.user);
+      saveProgress(mergedProgress);
+      store.setState({
+        currentUser: response.user,
+        progress: mergedProgress,
+        nickname: response.user.nickname
+      });
+      refreshLeaderboard();
+    } catch (error) {
+      console.error("Progress sync failed:", error);
+    }
+  }
+
+  async function refreshAdminUsers() {
+    const state = store.getState();
+
+    if (!state.authToken || !state.currentUser || state.currentUser.role !== "admin") {
+      return;
+    }
+
+    try {
+      const users = await fetchAdminUsers(state.authToken);
+      store.setState({ adminUsers: users });
+    } catch (error) {
+      store.setState({ authMessage: error.message, authStatus: "error" });
+    }
   }
 
   function getGameMeta(modeId) {
@@ -2518,15 +2836,8 @@
       });
     }
 
-    postLeaderboardScore({
-      nickname: store.getState().nickname,
-      points: updatedProgress.points,
-      streak: updatedProgress.streak
-    }).then(function () {
-      refreshLeaderboard();
-    }).catch(function () {
-      return null;
-    });
+    syncCurrentUserProgress(updatedProgress);
+    refreshLeaderboard();
   }
 
   function openMenu() {
@@ -2550,6 +2861,129 @@
 
     if (anchor) {
       anchor.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }
+
+  function handleAuthViewChange(view) {
+    saveAuthView(view);
+    store.setState({
+      authView: view,
+      authMessage: "",
+      authStatus: "idle"
+    });
+  }
+
+  async function handleRegister(credentials) {
+    store.setState({ authStatus: "loading", authMessage: "" });
+
+    try {
+      await registerUser(credentials);
+      saveAuthView("login");
+      store.setState({
+        authView: "login",
+        authStatus: "success",
+        authMessage: "Konto utworzone. Mozesz sie teraz zalogowac."
+      });
+    } catch (error) {
+      store.setState({
+        authStatus: "error",
+        authMessage: error.message
+      });
+    }
+  }
+
+  async function handleLogin(credentials) {
+    store.setState({ authStatus: "loading", authMessage: "" });
+
+    try {
+      const response = await loginUser(credentials);
+      const nextProgress = mergeProgressWithUser(loadSavedProgress(), response.user);
+
+      saveAuthToken(response.token);
+      saveNickname(response.user.nickname);
+      saveProgress(nextProgress);
+
+      store.setState({
+        authToken: response.token,
+        currentUser: response.user,
+        authStatus: "success",
+        authMessage: "Zalogowano pomyslnie.",
+        nickname: response.user.nickname,
+        progress: nextProgress
+      });
+
+      if (response.user.role === "admin") {
+        refreshAdminUsers();
+      }
+
+      refreshLeaderboard();
+    } catch (error) {
+      saveAuthToken("");
+      store.setState({
+        authToken: "",
+        currentUser: null,
+        adminUsers: [],
+        authStatus: "error",
+        authMessage: error.message
+      });
+    }
+  }
+
+  function handleLogout() {
+    saveAuthToken("");
+    store.setState({
+      authToken: "",
+      currentUser: null,
+      adminUsers: [],
+      authStatus: "success",
+      authMessage: "Wylogowano.",
+      nickname: loadNickname()
+    });
+  }
+
+  async function handleAdminPoints(userId, delta) {
+    const state = store.getState();
+
+    if (!state.authToken) {
+      return;
+    }
+
+    try {
+      await updateAdminPoints(state.authToken, userId, delta);
+      store.setState({
+        authStatus: "success",
+        authMessage: "Punkty uzytkownika zostaly zaktualizowane."
+      });
+      refreshAdminUsers();
+      refreshLeaderboard();
+    } catch (error) {
+      store.setState({
+        authStatus: "error",
+        authMessage: error.message
+      });
+    }
+  }
+
+  async function handleAdminBan(userId, banned) {
+    const state = store.getState();
+
+    if (!state.authToken) {
+      return;
+    }
+
+    try {
+      await updateAdminBan(state.authToken, userId, banned);
+      store.setState({
+        authStatus: "success",
+        authMessage: banned ? "Uzytkownik zostal zbanowany." : "Ban zostal zdjety."
+      });
+      refreshAdminUsers();
+      refreshLeaderboard();
+    } catch (error) {
+      store.setState({
+        authStatus: "error",
+        authMessage: error.message
+      });
     }
   }
 
@@ -2827,17 +3261,32 @@
   function updateApp(state) {
     renderProgressPanel(state.progress);
     renderMenu(menuView, gameModes, state.activeModeId, openMode);
-    nicknameInput.value = state.nickname;
+    renderAccountSummary(state.currentUser, state.authMessage, state.authStatus);
+    nicknameInput.value = state.currentUser ? state.currentUser.nickname : state.nickname;
+    nicknameInput.disabled = Boolean(state.currentUser);
 
     if (state.activeView === "menu") {
       applySeo(null);
       homeButton.hidden = true;
       renderHome(gameContainer, state.leaderboard, {
+        currentUser: state.currentUser,
+        view: state.authView,
+        status: state.authStatus,
+        message: state.authMessage,
+        adminUsers: state.adminUsers
+      }, {
         onStart: handleStartGame,
         onLeaderboardOpen: handleLeaderboardOpen,
         onModeSelect: function (modeId) {
           openMode(modeId);
-        }
+        },
+        onAuthViewChange: handleAuthViewChange,
+        onLogin: handleLogin,
+        onRegister: handleRegister,
+        onLogout: handleLogout,
+        onAdminRefresh: refreshAdminUsers,
+        onAdminPoints: handleAdminPoints,
+        onAdminBan: handleAdminBan
       });
       return;
     }
@@ -2956,6 +3405,11 @@
 
   homeButton.addEventListener("click", openMenu);
   nicknameInput.addEventListener("change", function () {
+    if (store.getState().currentUser) {
+      nicknameInput.value = store.getState().currentUser.nickname;
+      return;
+    }
+
     const safeNickname = String(nicknameInput.value || "").trim() || "Guest";
     saveNickname(safeNickname);
     store.setState({ nickname: safeNickname });
@@ -2964,6 +3418,36 @@
   updateApp(store.getState());
   refreshLeaderboard();
   applySeo(getModeFromUrl());
+
+  if (store.getState().authToken) {
+    fetchCurrentUser(store.getState().authToken)
+      .then(function (user) {
+        const mergedProgress = mergeProgressWithUser(loadSavedProgress(), user);
+        saveNickname(user.nickname);
+        saveProgress(mergedProgress);
+        store.setState({
+          currentUser: user,
+          nickname: user.nickname,
+          progress: mergedProgress,
+          authStatus: "success",
+          authMessage: "Sesja zostala przywrocona."
+        });
+
+        if (user.role === "admin") {
+          refreshAdminUsers();
+        }
+      })
+      .catch(function () {
+        saveAuthToken("");
+        store.setState({
+          authToken: "",
+          currentUser: null,
+          adminUsers: [],
+          authStatus: "error",
+          authMessage: "Sesja wygasla. Zaloguj sie ponownie."
+        });
+      });
+  }
 
   loadSuperheroes()
     .then(function (heroCollection) {
