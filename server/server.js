@@ -7,7 +7,6 @@ const jwt = require("jsonwebtoken");
 const mongoose = require("mongoose");
 const path = require("path");
 
-const app = express();
 
 async function connectDB() {
   try {
