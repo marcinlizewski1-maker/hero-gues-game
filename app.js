@@ -342,7 +342,7 @@
   }
 
   const SUPERHERO_API_URL = "https://akabab.github.io/superhero-api/api/all.json";
-API_BASE_URL = "http://localhost:3000";
+  const API_BASE_URL = window.HEROGUESS_API_URL || "https://hero-gues-game1.onrender.com";
   const ALLOWED_PUBLISHERS = new Set(["Marvel Comics", "DC Comics"]);
   const MAX_ATTEMPTS = 6;
   const MAX_HERO_COUNT = 150;
@@ -2342,7 +2342,7 @@ API_BASE_URL = "http://localhost:3000";
     }
 
     if (canonicalLink) {
-      canonicalLink.setAttribute("href", "https://hero-gues-game.vercel.app" + config.path);
+      canonicalLink.setAttribute("href", "https://hero-gues-game1.onrender.com" + config.path);
     }
   }
 

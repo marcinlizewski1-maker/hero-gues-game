@@ -9,6 +9,7 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const APP_BASE_URL =
   process.env.APP_BASE_URL || "https://hero-gues-game1.onrender.com";
+const FRONTEND_URL = process.env.FRONTEND_URL || APP_BASE_URL;
 const MONGODB_URI =
   process.env.MONGODB_URI ||
   "mongodb+srv://marcinlizewski1_db_user:L3SgCxQXEvs5pyXn@heroguess.hmuwj1b.mongodb.net/?appName=HeroGuess";
@@ -24,7 +25,19 @@ let isDatabaseReady = false;
 
 app.use(
   cors({
-    origin: true,
+    origin(origin, callback) {
+      if (!origin) {
+        return callback(null, true);
+      }
+
+      const allowedOrigins = new Set([APP_BASE_URL, FRONTEND_URL]);
+
+      if (allowedOrigins.has(origin)) {
+        return callback(null, true);
+      }
+
+      return callback(new Error("CORS blocked for origin: " + origin));
+    },
     credentials: true
   })
 );
@@ -185,7 +198,8 @@ app.get("/health", (_req, res) => {
   return res.json({
     ok: true,
     database: isDatabaseReady ? "connected" : "disconnected",
-    baseUrl: APP_BASE_URL
+    baseUrl: APP_BASE_URL,
+    frontendUrl: FRONTEND_URL
   });
 });
 
