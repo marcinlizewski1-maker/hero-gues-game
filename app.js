@@ -2089,6 +2089,254 @@
     };
   }
 
+  function createDailyClassicGame(heroCollection, progress) {
+    const heroes = heroCollection.heroes;
+    const dailyChallenge = progress && progress.dailyChallenge;
+    const savedResult = progress && progress.dailyChallengeResult;
+    const MAX_ATTEMPTS = 6;
+    const state = {
+      targetHero: null,
+      attempts: [],
+      status: "playing",
+      message: "",
+      locked: false
+    };
+
+    const lookup = new Map(heroes.map(function (hero) {
+      return [normalizeValue(hero.name), hero];
+    }));
+
+    heroes.forEach(function (hero) {
+      if (hero.originalName) {
+        lookup.set(normalizeValue(hero.originalName), hero);
+      }
+      lookup.set(normalizeValue(hero.localizedName), hero);
+    });
+
+    function compareExact(label, guessedValue, targetValue) {
+      const isCorrect = normalizeValue(guessedValue) === normalizeValue(targetValue);
+
+      return {
+        label: label,
+        guessedValue: guessedValue,
+        status: isCorrect ? "correct" : "wrong",
+        feedback: isCorrect ? "âś”ď¸Ź identyczne" : "âťŚ rozne"
+      };
+    }
+
+    function comparePowerLevel(guessedValue, targetValue) {
+      const delta = Math.abs(guessedValue - targetValue);
+      let status = "wrong";
+      let feedback = "âťŚ rozne";
+
+      if (delta === 0) {
+        status = "correct";
+        feedback = "âś”ď¸Ź identyczne";
+      } else if (delta <= 8) {
+        status = "partial";
+        feedback = "đźźˇ bardzo blisko";
+      } else if (delta <= 15) {
+        status = "partial";
+        feedback = "đźźˇ podobny poziom";
+      }
+
+      return {
+        label: "Power level",
+        guessedValue: String(guessedValue),
+        status: status,
+        feedback: feedback
+      };
+    }
+
+    function compareIntelligence(guessedValue, targetValue) {
+      const delta = Math.abs(guessedValue - targetValue);
+      let status = "wrong";
+      let feedback = "âťŚ rozne";
+
+      if (delta === 0) {
+        status = "correct";
+        feedback = "âś”ď¸Ź identyczne";
+      } else if (delta === 1) {
+        status = "partial";
+        feedback = "đźźˇ podobne";
+      }
+
+      return {
+        label: "Intelligence",
+        guessedValue: String(guessedValue),
+        status: status,
+        feedback: feedback
+      };
+    }
+
+    function compareTeam(guessedHero, targetHero) {
+      const guessedTeam = guessedHero.team;
+      const targetTeam = targetHero.team;
+      const targetFormerTeams = targetHero.formerTeams || [];
+      const guessedFormerTeams = guessedHero.formerTeams || [];
+
+      if (normalizeValue(guessedTeam) === normalizeValue(targetTeam)) {
+        return {
+          label: "Team",
+          guessedValue: guessedHero.localizedTeam,
+          status: "correct",
+          feedback: "âś”ď¸Ź identyczne"
+        };
+      }
+
+      if (
+        targetFormerTeams.some(function (team) {
+          return normalizeValue(team) === normalizeValue(guessedTeam);
+        }) ||
+        guessedFormerTeams.some(function (team) {
+          return normalizeValue(team) === normalizeValue(targetTeam);
+        })
+      ) {
+        return {
+          label: "Team",
+          guessedValue: guessedHero.localizedTeam,
+          status: "partial",
+          feedback: "đźźˇ powiazana druzyna"
+        };
+      }
+
+      return {
+        label: "Team",
+        guessedValue: guessedHero.localizedTeam,
+        status: "wrong",
+        feedback: "âťŚ rozne"
+      };
+    }
+
+    function createNarrowingHint(comparisons) {
+      const exact = comparisons.filter(function (comparison) {
+        return comparison.status === "correct";
+      }).map(function (comparison) {
+        return comparison.label.toLowerCase();
+      });
+
+      const partial = comparisons.filter(function (comparison) {
+        return comparison.status === "partial";
+      }).map(function (comparison) {
+        return comparison.label.toLowerCase();
+      });
+
+      if (exact.length && partial.length) {
+        return "Zawaz juz na cechach: " + exact.join(", ") + ". Dodatkowo blisko sa: " + partial.join(", ") + ".";
+      }
+
+      if (exact.length) {
+        return "Pewne dopasowania: " + exact.join(", ") + ". Skup sie na pozostalych cechach.";
+      }
+
+      if (partial.length) {
+        return "Blisko trafienia przy: " + partial.join(", ") + ". Szukaj bohatera o podobnym profilu.";
+      }
+
+      return "Ta proba odrzuca sporo mozliwosci. Sprobuj bohatera z innym profilem.";
+    }
+
+    function init() {
+      const target = heroes.find(function (hero) {
+        return dailyChallenge && hero.id === dailyChallenge.heroId;
+      }) || heroes[0];
+
+      state.targetHero = target;
+      state.attempts = [];
+      state.status = "playing";
+      state.message = "";
+      state.locked = false;
+
+      if (savedResult && savedResult.date === getTodayKey()) {
+        state.status = savedResult.won ? "won" : "lost";
+        state.message = savedResult.won
+          ? "Dzisiejsze wyzwanie jest juz ukonczone. Bohater: " + savedResult.heroName + "."
+          : "Dzisiejsze wyzwanie zostalo juz rozegrane. Bohater: " + savedResult.heroName + ".";
+        state.locked = true;
+      }
+    }
+
+    function getState() {
+      const lastAttempt = state.attempts[0] || null;
+
+      return {
+        targetHero: state.targetHero,
+        attempts: state.attempts.slice(),
+        status: state.status,
+        message: state.message,
+        remainingAttempts: Math.max(0, MAX_ATTEMPTS - state.attempts.length),
+        attemptsUsed: state.attempts.length,
+        narrowingHint: lastAttempt ? lastAttempt.narrowingHint : "Pierwsza proba odsloni profil bohatera dnia.",
+        heroNames: heroes.map(function (hero) {
+          return hero.localizedName;
+        }),
+        locked: state.locked,
+        maxAttempts: MAX_ATTEMPTS
+      };
+    }
+
+    function submitGuess(rawGuess) {
+      if (state.locked || state.status !== "playing") {
+        return getState();
+      }
+
+      const guessName = String(rawGuess || "").trim();
+      const guessedHero = lookup.get(normalizeValue(guessName));
+
+      if (!guessName) {
+        state.message = "Wpisz nazwe bohatera.";
+        return getState();
+      }
+
+      if (!guessedHero) {
+        state.message = "Nie znaleziono takiego bohatera w bazie.";
+        return getState();
+      }
+
+      const comparisons = [
+        compareExact("Uniwersum", guessedHero.universe, state.targetHero.universe),
+        compareTeam(guessedHero, state.targetHero),
+        compareExact("Plec", guessedHero.gender, state.targetHero.gender),
+        compareExact("Alignment", guessedHero.alignment, state.targetHero.alignment),
+        compareExact("Character type", guessedHero.characterType, state.targetHero.characterType),
+        compareExact("Combat style", guessedHero.combatStyle, state.targetHero.combatStyle),
+        comparePowerLevel(guessedHero.powerLevel, state.targetHero.powerLevel),
+        compareIntelligence(guessedHero.intelligence, state.targetHero.intelligence),
+        compareExact("Mobility", guessedHero.mobility, state.targetHero.mobility),
+        compareExact("Power source", guessedHero.powerSource, state.targetHero.powerSource),
+        compareExact("Era", guessedHero.era, state.targetHero.era),
+        compareExact("Main ability", guessedHero.mainAbilityType, state.targetHero.mainAbilityType)
+      ];
+
+      state.attempts.unshift({
+        guessName: guessedHero.localizedName,
+        displayName: guessedHero.localizedName,
+        comparisons: comparisons,
+        narrowingHint: createNarrowingHint(comparisons)
+      });
+      state.message = "";
+
+      if (guessedHero.id === state.targetHero.id) {
+        state.status = "won";
+        state.message = "âś”ď¸Ź Daily Challenge ukonczony. Bohater to " + state.targetHero.localizedName + ".";
+        state.locked = true;
+      } else if (state.attempts.length >= MAX_ATTEMPTS) {
+        state.status = "lost";
+        state.message = "Koniec prob. Dzisiejszy bohater to " + state.targetHero.localizedName + ".";
+        state.locked = true;
+      }
+
+      return getState();
+    }
+
+    init();
+
+    return {
+      getState: getState,
+      submitGuess: submitGuess
+    };
+  }
+
   function createFeatureCards(features) {
     return features.map(function (feature) {
       return '<article class="feature-card"><h3>Feature</h3><p class="mode-meta">' + feature + "</p></article>";
@@ -3226,7 +3474,7 @@
       const dailyCollection = store.getState().heroCollection;
       const progress = store.getState().progress;
       if (dailyCollection && dailyCollection.heroes.length) {
-        dailyGame = createDailyGame(dailyCollection, progress);
+        dailyGame = createDailyClassicGame(dailyCollection, progress);
       }
     }
 
@@ -3669,3 +3917,4 @@
       store.setState({ dataStatus: "error" });
     });
 }());
+
