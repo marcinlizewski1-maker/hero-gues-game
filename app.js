@@ -2854,6 +2854,62 @@
   }
 
   function renderDailyGame(container, gameState, handlers, meta) {
+    const dailyResultLabel = gameState.status === "won"
+      ? "Wygrana"
+      : gameState.status === "lost"
+        ? "Przegrana"
+        : gameState.locked
+          ? "Rozegrano dzisiaj"
+          : "W toku";
+    const dailyResultCopy = gameState.status === "won"
+      ? "Trafione. Bohaterem dnia byl " + gameState.targetHero.localizedName + "."
+      : gameState.status === "lost"
+        ? "Koniec prob. Bohaterem dnia byl " + gameState.targetHero.localizedName + "."
+        : gameState.locked
+          ? gameState.message
+          : "Daily Challenge korzysta z ukladu Classic i porownuje cechy bohatera po kazdej probie.";
+    const dailyOptions = gameState.heroNames.map(function (name) {
+      return '<option value="' + name + '"></option>';
+    }).join("");
+
+    container.innerHTML = '<div class="content-grid">' +
+      renderGameMeta(meta) +
+      '<div class="content-header">' +
+        '<div><div class="mode-badge">Daily Challenge</div><h2 class="mode-title">Bohater dnia w stylu Classic</h2></div>' +
+        '<button class="action-button" type="button" id="modeBackButton">Back to menu</button>' +
+      '</div>' +
+      renderFeedbackBanner(gameState.message, gameState.status) +
+      '<section class="classic-panel">' +
+        '<div class="classic-status">' +
+          '<article class="status-card"><h3>Limit prob</h3><p class="mode-meta">' + gameState.remainingAttempts + ' / ' + gameState.maxAttempts + ' pozostalo</p></article>' +
+          '<article class="status-card"><h3>Wynik</h3><p class="mode-meta">' + dailyResultLabel + '</p></article>' +
+        '</div>' +
+        '<p class="mode-description">' + dailyResultCopy + '</p>' +
+        '<article class="status-card"><h3>Hint po ostatniej probie</h3><p class="mode-meta">' + gameState.narrowingHint + '</p></article>' +
+        '<form class="guess-form" id="dailyGuessForm">' +
+          '<label class="guess-label" for="dailyHeroGuess">Wpisz nazwe bohatera dnia</label>' +
+          '<div class="guess-row">' +
+            '<input class="guess-input" id="dailyHeroGuess" name="dailyHeroGuess" list="dailyHeroSuggestions" placeholder="Np. Batman, Spider-Man, Wonder Woman" autocomplete="off" ' + (gameState.locked || gameState.status !== "playing" ? "disabled" : "") + '>' +
+            '<button class="action-button" type="submit" ' + (gameState.locked || gameState.status !== "playing" ? "disabled" : "") + '>Sprawdz</button>' +
+          '</div>' +
+          '<datalist id="dailyHeroSuggestions">' + dailyOptions + '</datalist>' +
+        '</form>' +
+      '</section>' +
+      '<section class="attempts-panel">' +
+        '<div class="attempts-header"><h3>Historia prob</h3><p class="mode-meta">' + (gameState.attempts.length ? "Najnowsza proba jest na gorze." : "Jeszcze nie ma zadnych prob.") + '</p></div>' +
+        '<div class="attempts-list">' + (gameState.attempts.length ? createAttemptRows(gameState.attempts) : '<div class="empty-attempts">Masz jedna runde dziennie, ale do ' + gameState.maxAttempts + ' prob w tej rundzie.</div>') + '</div>' +
+      '</section>' +
+      renderInGameLeaderboard(meta.leaderboard) +
+    '</div>';
+
+    container.querySelector("#modeBackButton").addEventListener("click", handlers.onBack);
+    container.querySelector("#dailyGuessForm").addEventListener("submit", function (event) {
+      event.preventDefault();
+      const input = container.querySelector("#dailyHeroGuess");
+      handlers.onGuess(input.value);
+      input.value = "";
+    });
+    return;
     const attemptsBlock = gameState.attempts.length
       ? gameState.attempts.map(function (attempt, index) {
           return '<article class="attempt-card"><div class="attempt-card-header"><h3>' + attempt.guessName + '</h3><span>Proba ' + (gameState.attempts.length - index) + '</span></div><p class="attempt-hint">' + (attempt.isCorrect ? "✔️ Trafiony bohater." : "❌ Bledna odpowiedz.") + '</p></article>';
