@@ -31,8 +31,12 @@ app.use(
       }
 
       const allowedOrigins = new Set([APP_BASE_URL, FRONTEND_URL]);
+      const isTrustedPreview =
+        /\.onrender\.com$/i.test(origin) ||
+        /\.vercel\.app$/i.test(origin) ||
+        /\.netlify\.app$/i.test(origin);
 
-      if (allowedOrigins.has(origin)) {
+      if (allowedOrigins.has(origin) || isTrustedPreview) {
         return callback(null, true);
       }
 
@@ -41,6 +45,7 @@ app.use(
     credentials: true
   })
 );
+app.options("*", cors());
 app.use(express.json());
 
 const userSchema = new mongoose.Schema(
@@ -395,6 +400,19 @@ app.patch("/user/:id/ban", requireDatabase, authMiddleware, adminOnly, async (re
 });
 
 app.use(express.static(path.join(__dirname, "..")));
+
+app.use((error, _req, res, next) => {
+  if (!error) {
+    return next();
+  }
+
+  if (String(error.message || "").startsWith("CORS blocked")) {
+    return res.status(403).json({ error: error.message });
+  }
+
+  console.error("Unhandled server error:", error);
+  return res.status(500).json({ error: "Wewnetrzny blad serwera." });
+});
 
 app.get("*", (req, res) => {
   const apiPrefixes = ["/register", "/login", "/leaderboard", "/me", "/admin", "/user/"];
