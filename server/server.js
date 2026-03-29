@@ -22,6 +22,7 @@ const MONGOOSE_CONNECT_OPTIONS = {
 };
 const DB_RETRY_DELAY_MS = 15000;
 let isDatabaseReady = false;
+let lastDatabaseError = "";
 
 app.use(
   cors({
@@ -68,6 +69,7 @@ const User = mongoose.model("User", userSchema);
 
 mongoose.connection.on("connected", () => {
   isDatabaseReady = true;
+  lastDatabaseError = "";
   console.log("MongoDB connection established.");
 });
 
@@ -78,6 +80,7 @@ mongoose.connection.on("disconnected", () => {
 
 mongoose.connection.on("error", (error) => {
   isDatabaseReady = false;
+  lastDatabaseError = error.message || "MongoDB connection error";
   console.error("MongoDB connection error:", error.message);
 });
 
@@ -211,7 +214,10 @@ app.get("/health", (_req, res) => {
     ok: true,
     database: isDatabaseReady ? "connected" : "disconnected",
     baseUrl: APP_BASE_URL,
-    frontendUrl: FRONTEND_URL
+    frontendUrl: FRONTEND_URL,
+    dbState: mongoose.connection.readyState,
+    dbName: mongoose.connection.name || null,
+    lastDatabaseError: lastDatabaseError || null
   });
 });
 
@@ -439,6 +445,7 @@ async function connectToDatabase() {
     await ensureAdminAccount();
   } catch (error) {
     isDatabaseReady = false;
+    lastDatabaseError = error.message || "Initial MongoDB Atlas connection failed";
     console.error("Initial MongoDB Atlas connection failed:", error.message);
     console.error("Most likely cause: Atlas Network Access does not allow Render to connect.");
     setTimeout(connectToDatabase, DB_RETRY_DELAY_MS);
