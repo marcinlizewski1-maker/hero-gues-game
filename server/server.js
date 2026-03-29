@@ -12,7 +12,7 @@ const APP_BASE_URL =
 const FRONTEND_URL = process.env.FRONTEND_URL || "https://hero-gues-game.vercel.app";
 const MONGODB_URI =
   process.env.MONGODB_URI ||
-  "mongodb+srv://marcinlizewski1_db_user:L3SgCxQXEvs5pyXn@heroguess.hmuwj1b.mongodb.net/?appName=HeroGuess";
+  "mongodb+srv://marcinlizewski1_db_user:L3SgCxQXEvs5pyXn@heroguess.hmuwj1b.mongodb.net/heroguess?retryWrites=true&w=majority&appName=HeroGuess";
 const JWT_SECRET = process.env.JWT_SECRET || "hero-guess-dev-secret";
 const ADMIN_EMAIL = "marcin.lizewski2@wp.pl";
 const ADMIN_PASSWORD = "Martillos6";
