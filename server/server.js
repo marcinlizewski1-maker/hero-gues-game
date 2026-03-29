@@ -23,8 +23,10 @@ const MONGOOSE_CONNECT_OPTIONS = {
   autoSelectFamily: false
 };
 const DB_RETRY_DELAY_MS = 15000;
+const SUPERHERO_API_URL = "https://akabab.github.io/superhero-api/api/all.json";
 let isDatabaseReady = false;
 let lastDatabaseError = "";
+let superheroCache = null;
 
 app.use(
   cors({
@@ -221,6 +223,26 @@ app.get("/health", (_req, res) => {
     dbName: mongoose.connection.name || null,
     lastDatabaseError: lastDatabaseError || null
   });
+});
+
+app.get("/superheroes", async (_req, res) => {
+  try {
+    if (superheroCache) {
+      return res.json(superheroCache);
+    }
+
+    const response = await fetch(SUPERHERO_API_URL);
+
+    if (!response.ok) {
+      return res.status(502).json({ error: "Nie udalo sie pobrac danych bohaterow z zewnetrznego API." });
+    }
+
+    superheroCache = await response.json();
+    return res.json(superheroCache);
+  } catch (error) {
+    console.error("Superhero proxy failed:", error);
+    return res.status(500).json({ error: "Nie udalo sie pobrac danych bohaterow." });
+  }
 });
 
 app.post("/register", requireDatabase, async (req, res) => {
