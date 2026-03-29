@@ -407,6 +407,40 @@ app.patch("/user/:id/ban", requireDatabase, authMiddleware, adminOnly, async (re
   }
 });
 
+app.delete("/user/:id", requireDatabase, authMiddleware, adminOnly, async (req, res) => {
+  try {
+    const userId = String(req.params.id || "");
+
+    if (!userId) {
+      return res.status(400).json({ error: "Parametr id jest wymagany." });
+    }
+
+    if (String(req.user._id) === userId) {
+      return res.status(400).json({ error: "Admin nie moze usunac swojego konta." });
+    }
+
+    const user = await User.findById(userId);
+
+    if (!user) {
+      return res.status(404).json({ error: "Nie znaleziono uzytkownika." });
+    }
+
+    if (user.role === "admin") {
+      return res.status(403).json({ error: "Nie mozna usunac konta admina." });
+    }
+
+    await User.deleteOne({ _id: user._id });
+
+    return res.json({
+      ok: true,
+      deletedUserId: userId
+    });
+  } catch (error) {
+    console.error("User delete failed:", error);
+    return res.status(500).json({ error: "Nie udalo sie usunac uzytkownika." });
+  }
+});
+
 app.use(express.static(path.join(__dirname, "..")));
 
 app.use((error, _req, res, next) => {

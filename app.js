@@ -705,6 +705,13 @@
     });
   }
 
+  async function deleteAdminUser(token, userId) {
+    return requestJson("/user/" + userId, {
+      method: "DELETE",
+      headers: getAuthHeaders(token)
+    });
+  }
+
   function containsAny(text, values) {
     return values.some(function (value) {
       return text.includes(value);
@@ -2213,10 +2220,10 @@
       return selectedIds.indexOf(userId) !== -1;
     });
 
-    return '<section class="admin-panel"><div class="admin-panel-head"><div><div class="mode-badge">Admin</div><h3>Panel admina</h3></div><button class="action-button secondary-button" type="button" id="refreshAdminUsersButton">Odswiez</button></div><section class="admin-bulk-panel"><label class="admin-select-all"><input type="checkbox" id="selectAllAdminUsers" ' + (allSelected ? "checked" : "") + '>Zaznacz wszystkich</label><p class="mode-meta">Zaznaczono: ' + selectedIds.length + ' graczy</p><div class="admin-bulk-actions"><button class="action-button admin-small-button" type="button" id="bulkAddPointsButton" ' + (!selectedIds.length ? "disabled" : "") + '>+50 wszystkim</button><button class="action-button secondary-button admin-small-button" type="button" id="bulkRemovePointsButton" ' + (!selectedIds.length ? "disabled" : "") + '>-50 wszystkim</button><button class="action-button admin-ban-button" type="button" id="bulkBanButton" ' + (!selectedIds.length ? "disabled" : "") + '>Ban zaznaczonych</button><button class="action-button secondary-button admin-small-button" type="button" id="bulkUnbanButton" ' + (!selectedIds.length ? "disabled" : "") + '>Odbanuj zaznaczonych</button></div></section><div class="admin-users-list">' +
+    return '<section class="admin-panel"><div class="admin-panel-head"><div><div class="mode-badge">Admin</div><h3>Panel admina</h3></div><button class="action-button secondary-button" type="button" id="refreshAdminUsersButton">Odswiez</button></div><section class="admin-bulk-panel"><label class="admin-select-all"><input type="checkbox" id="selectAllAdminUsers" ' + (allSelected ? "checked" : "") + '>Zaznacz wszystkich</label><p class="mode-meta">Zaznaczono: ' + selectedIds.length + ' graczy</p><div class="admin-bulk-actions"><button class="action-button admin-small-button" type="button" id="bulkAddPointsButton" ' + (!selectedIds.length ? "disabled" : "") + '>+50 wszystkim</button><button class="action-button secondary-button admin-small-button" type="button" id="bulkRemovePointsButton" ' + (!selectedIds.length ? "disabled" : "") + '>-50 wszystkim</button><button class="action-button admin-ban-button" type="button" id="bulkBanButton" ' + (!selectedIds.length ? "disabled" : "") + '>Ban zaznaczonych</button><button class="action-button secondary-button admin-small-button" type="button" id="bulkUnbanButton" ' + (!selectedIds.length ? "disabled" : "") + '>Odbanuj zaznaczonych</button><button class="action-button admin-delete-button" type="button" id="bulkDeleteUsersButton" ' + (!selectedIds.length ? "disabled" : "") + '>Usun zaznaczonych</button></div></section><div class="admin-users-list">' +
       adminUsers.map(function (user) {
         const userId = String(user.id || user._id);
-        return '<article class="admin-user-row"><div class="admin-user-main"><label class="admin-user-selector"><input type="checkbox" data-admin-select="' + userId + '" ' + (selectedIds.indexOf(userId) !== -1 ? "checked" : "") + '><span>Zaznacz</span></label><div><strong>' + user.nickname + '</strong><p>' + user.email + ' • ' + user.role + (user.banned ? ' • zbanowany' : "") + '</p></div></div><div class="admin-user-stats"><span>' + user.points + ' pkt</span><span>streak ' + user.streak + '</span></div><div class="admin-user-actions"><button class="action-button admin-small-button" type="button" data-admin-points="' + userId + '" data-delta="50">+50</button><button class="action-button secondary-button admin-small-button" type="button" data-admin-points="' + userId + '" data-delta="-50">-50</button><button class="action-button admin-ban-button" type="button" data-admin-ban="' + userId + '" data-banned="' + (!user.banned) + '">' + (user.banned ? "Odbanuj" : "Ban") + '</button></div></article>';
+        return '<article class="admin-user-row"><div class="admin-user-main"><label class="admin-user-selector"><input type="checkbox" data-admin-select="' + userId + '" ' + (selectedIds.indexOf(userId) !== -1 ? "checked" : "") + '><span>Zaznacz</span></label><div><strong>' + user.nickname + '</strong><p>' + user.email + ' • ' + user.role + (user.banned ? ' • zbanowany' : "") + '</p></div></div><div class="admin-user-stats"><span>' + user.points + ' pkt</span><span>streak ' + user.streak + '</span></div><div class="admin-user-actions"><button class="action-button admin-small-button" type="button" data-admin-points="' + userId + '" data-delta="50">+50</button><button class="action-button secondary-button admin-small-button" type="button" data-admin-points="' + userId + '" data-delta="-50">-50</button><button class="action-button admin-ban-button" type="button" data-admin-ban="' + userId + '" data-banned="' + (!user.banned) + '">' + (user.banned ? "Odbanuj" : "Ban") + '</button><button class="action-button admin-delete-button" type="button" data-admin-delete="' + userId + '">Usun</button></div></article>';
       }).join("") +
     '</div></section>';
   }
@@ -2301,6 +2308,12 @@
       });
     });
 
+    container.querySelectorAll("[data-admin-delete]").forEach(function (button) {
+      button.addEventListener("click", function () {
+        handlers.onAdminDelete(button.dataset.adminDelete);
+      });
+    });
+
     const selectAllAdminUsers = container.querySelector("#selectAllAdminUsers");
     if (selectAllAdminUsers) {
       selectAllAdminUsers.addEventListener("change", function () {
@@ -2339,6 +2352,13 @@
     if (bulkUnbanButton) {
       bulkUnbanButton.addEventListener("click", function () {
         handlers.onAdminBulkBan(false);
+      });
+    }
+
+    const bulkDeleteUsersButton = container.querySelector("#bulkDeleteUsersButton");
+    if (bulkDeleteUsersButton) {
+      bulkDeleteUsersButton.addEventListener("click", function () {
+        handlers.onAdminBulkDelete();
       });
     }
   }
@@ -3099,6 +3119,67 @@
     }
   }
 
+  async function handleAdminDelete(userId) {
+    const state = store.getState();
+
+    if (!state.authToken || !userId) {
+      return;
+    }
+
+    if (!window.confirm("Na pewno usunac tego uzytkownika?")) {
+      return;
+    }
+
+    try {
+      await deleteAdminUser(state.authToken, userId);
+      store.setState({
+        authStatus: "success",
+        authMessage: "Uzytkownik zostal usuniety.",
+        selectedAdminUsers: (state.selectedAdminUsers || []).filter(function (id) {
+          return id !== userId;
+        })
+      });
+      refreshAdminUsers();
+      refreshLeaderboard();
+    } catch (error) {
+      store.setState({
+        authStatus: "error",
+        authMessage: error.message
+      });
+    }
+  }
+
+  async function handleAdminBulkDelete() {
+    const state = store.getState();
+    const selectedIds = state.selectedAdminUsers || [];
+
+    if (!state.authToken || !selectedIds.length) {
+      return;
+    }
+
+    if (!window.confirm("Na pewno usunac " + selectedIds.length + " zaznaczonych uzytkownikow?")) {
+      return;
+    }
+
+    try {
+      await Promise.all(selectedIds.map(function (userId) {
+        return deleteAdminUser(state.authToken, userId);
+      }));
+      store.setState({
+        authStatus: "success",
+        authMessage: "Usunieto " + selectedIds.length + " uzytkownikow.",
+        selectedAdminUsers: []
+      });
+      refreshAdminUsers();
+      refreshLeaderboard();
+    } catch (error) {
+      store.setState({
+        authStatus: "error",
+        authMessage: error.message
+      });
+    }
+  }
+
   function openMode(modeId, options) {
     const settings = options || {};
 
@@ -3400,10 +3481,12 @@
         onAdminRefresh: refreshAdminUsers,
         onAdminPoints: handleAdminPoints,
         onAdminBan: handleAdminBan,
+        onAdminDelete: handleAdminDelete,
         onAdminToggleSelect: handleAdminToggleSelect,
         onAdminSelectAll: handleAdminSelectAll,
         onAdminBulkPoints: handleAdminBulkPoints,
-        onAdminBulkBan: handleAdminBulkBan
+        onAdminBulkBan: handleAdminBulkBan,
+        onAdminBulkDelete: handleAdminBulkDelete
       });
       return;
     }

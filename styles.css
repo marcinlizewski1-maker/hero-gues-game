@@ -401,6 +401,14 @@ body::before {
   background: linear-gradient(135deg, rgba(112, 31, 47, 0.78), rgba(64, 17, 27, 0.92));
 }
 
+.admin-delete-button {
+  margin-top: 0;
+  min-height: 46px;
+  padding: 10px 16px;
+  border-color: rgba(255, 148, 106, 0.36);
+  background: linear-gradient(135deg, rgba(124, 58, 25, 0.82), rgba(76, 31, 13, 0.94));
+}
+
 .start-hero-card {
   padding: 34px;
   border: 1px solid var(--border);
