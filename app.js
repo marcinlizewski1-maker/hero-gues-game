@@ -3474,7 +3474,12 @@
       const dailyCollection = store.getState().heroCollection;
       const progress = store.getState().progress;
       if (dailyCollection && dailyCollection.heroes.length) {
-        dailyGame = createDailyClassicGame(dailyCollection, progress);
+        try {
+          dailyGame = createDailyClassicGame(dailyCollection, progress);
+        } catch (error) {
+          dailyGame = null;
+          console.error("Daily mode init failed:", error);
+        }
       }
     }
 
