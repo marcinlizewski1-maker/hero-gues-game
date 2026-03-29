@@ -9,7 +9,7 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const APP_BASE_URL =
   process.env.APP_BASE_URL || "https://hero-gues-game1.onrender.com";
-const FRONTEND_URL = process.env.FRONTEND_URL || APP_BASE_URL;
+const FRONTEND_URL = process.env.FRONTEND_URL || "https://hero-gues-game.vercel.app";
 const MONGODB_URI =
   process.env.MONGODB_URI ||
   "mongodb+srv://marcinlizewski1_db_user:L3SgCxQXEvs5pyXn@heroguess.hmuwj1b.mongodb.net/?appName=HeroGuess";
