@@ -2202,6 +2202,25 @@
     '</div></section>';
   }
 
+  function renderAdminSectionEnhanced(adminUsers, selectedAdminUsers) {
+    if (!adminUsers || !adminUsers.length) {
+      return renderAdminSection(adminUsers);
+    }
+
+    const selectedIds = Array.isArray(selectedAdminUsers) ? selectedAdminUsers : [];
+    const allSelected = adminUsers.length && adminUsers.every(function (user) {
+      const userId = String(user.id || user._id);
+      return selectedIds.indexOf(userId) !== -1;
+    });
+
+    return '<section class="admin-panel"><div class="admin-panel-head"><div><div class="mode-badge">Admin</div><h3>Panel admina</h3></div><button class="action-button secondary-button" type="button" id="refreshAdminUsersButton">Odswiez</button></div><section class="admin-bulk-panel"><label class="admin-select-all"><input type="checkbox" id="selectAllAdminUsers" ' + (allSelected ? "checked" : "") + '>Zaznacz wszystkich</label><p class="mode-meta">Zaznaczono: ' + selectedIds.length + ' graczy</p><div class="admin-bulk-actions"><button class="action-button admin-small-button" type="button" id="bulkAddPointsButton" ' + (!selectedIds.length ? "disabled" : "") + '>+50 wszystkim</button><button class="action-button secondary-button admin-small-button" type="button" id="bulkRemovePointsButton" ' + (!selectedIds.length ? "disabled" : "") + '>-50 wszystkim</button><button class="action-button admin-ban-button" type="button" id="bulkBanButton" ' + (!selectedIds.length ? "disabled" : "") + '>Ban zaznaczonych</button><button class="action-button secondary-button admin-small-button" type="button" id="bulkUnbanButton" ' + (!selectedIds.length ? "disabled" : "") + '>Odbanuj zaznaczonych</button></div></section><div class="admin-users-list">' +
+      adminUsers.map(function (user) {
+        const userId = String(user.id || user._id);
+        return '<article class="admin-user-row"><div class="admin-user-main"><label class="admin-user-selector"><input type="checkbox" data-admin-select="' + userId + '" ' + (selectedIds.indexOf(userId) !== -1 ? "checked" : "") + '><span>Zaznacz</span></label><div><strong>' + user.nickname + '</strong><p>' + user.email + ' • ' + user.role + (user.banned ? ' • zbanowany' : "") + '</p></div></div><div class="admin-user-stats"><span>' + user.points + ' pkt</span><span>streak ' + user.streak + '</span></div><div class="admin-user-actions"><button class="action-button admin-small-button" type="button" data-admin-points="' + userId + '" data-delta="50">+50</button><button class="action-button secondary-button admin-small-button" type="button" data-admin-points="' + userId + '" data-delta="-50">-50</button><button class="action-button admin-ban-button" type="button" data-admin-ban="' + userId + '" data-banned="' + (!user.banned) + '">' + (user.banned ? "Odbanuj" : "Ban") + '</button></div></article>';
+      }).join("") +
+    '</div></section>';
+  }
+
   function renderHome(container, leaderboard, authState, handlers) {
     container.innerHTML = '<div class="home-screen">' +
       '<section class="start-hero-card">' +
@@ -2219,7 +2238,7 @@
         '</div>' +
       '</section>' +
       renderAuthSection(authState) +
-      (authState.currentUser && authState.currentUser.role === "admin" ? renderAdminSection(authState.adminUsers) : "") +
+      (authState.currentUser && authState.currentUser.role === "admin" ? renderAdminSectionEnhanced(authState.adminUsers, authState.selectedAdminUsers) : "") +
       '<div id="homeLeaderboardAnchor">' + renderLeaderboardBlock(leaderboard) + '</div>' +
     '</div>';
 
@@ -2281,6 +2300,47 @@
         handlers.onAdminBan(button.dataset.adminBan, button.dataset.banned === "true");
       });
     });
+
+    const selectAllAdminUsers = container.querySelector("#selectAllAdminUsers");
+    if (selectAllAdminUsers) {
+      selectAllAdminUsers.addEventListener("change", function () {
+        handlers.onAdminSelectAll(selectAllAdminUsers.checked);
+      });
+    }
+
+    container.querySelectorAll("[data-admin-select]").forEach(function (checkbox) {
+      checkbox.addEventListener("change", function () {
+        handlers.onAdminToggleSelect(checkbox.dataset.adminSelect, checkbox.checked);
+      });
+    });
+
+    const bulkAddPointsButton = container.querySelector("#bulkAddPointsButton");
+    if (bulkAddPointsButton) {
+      bulkAddPointsButton.addEventListener("click", function () {
+        handlers.onAdminBulkPoints(50);
+      });
+    }
+
+    const bulkRemovePointsButton = container.querySelector("#bulkRemovePointsButton");
+    if (bulkRemovePointsButton) {
+      bulkRemovePointsButton.addEventListener("click", function () {
+        handlers.onAdminBulkPoints(-50);
+      });
+    }
+
+    const bulkBanButton = container.querySelector("#bulkBanButton");
+    if (bulkBanButton) {
+      bulkBanButton.addEventListener("click", function () {
+        handlers.onAdminBulkBan(true);
+      });
+    }
+
+    const bulkUnbanButton = container.querySelector("#bulkUnbanButton");
+    if (bulkUnbanButton) {
+      bulkUnbanButton.addEventListener("click", function () {
+        handlers.onAdminBulkBan(false);
+      });
+    }
   }
 
   function getModeFromUrl() {
@@ -2669,7 +2729,8 @@
     authStatus: "idle",
     authMessage: "",
     currentUser: null,
-    adminUsers: []
+    adminUsers: [],
+    selectedAdminUsers: []
   });
 
   const menuView = document.querySelector("#menuView");
@@ -2760,7 +2821,15 @@
 
     try {
       const users = await fetchAdminUsers(state.authToken);
-      store.setState({ adminUsers: users });
+      const selectedLookup = new Set(store.getState().selectedAdminUsers || []);
+      const nextSelected = users
+        .map(function (user) {
+          return String(user.id || user._id);
+        })
+        .filter(function (userId) {
+          return selectedLookup.has(userId);
+        });
+      store.setState({ adminUsers: users, selectedAdminUsers: nextSelected });
     } catch (error) {
       store.setState({ authMessage: error.message, authStatus: "error" });
     }
@@ -2888,6 +2957,7 @@
         authToken: "",
         currentUser: null,
         adminUsers: [],
+        selectedAdminUsers: [],
         authStatus: "error",
         authMessage: error.message
       });
@@ -2900,6 +2970,7 @@
       authToken: "",
       currentUser: null,
       adminUsers: [],
+      selectedAdminUsers: [],
       authStatus: "success",
       authMessage: "Wylogowano.",
       nickname: loadNickname()
@@ -2929,6 +3000,56 @@
     }
   }
 
+  function handleAdminToggleSelect(userId, checked) {
+    const current = store.getState().selectedAdminUsers || [];
+    const next = checked
+      ? current.concat(userId).filter(function (value, index, array) {
+          return array.indexOf(value) === index;
+        })
+      : current.filter(function (value) {
+          return value !== userId;
+        });
+
+    store.setState({ selectedAdminUsers: next });
+  }
+
+  function handleAdminSelectAll(checked) {
+    const users = store.getState().adminUsers || [];
+    store.setState({
+      selectedAdminUsers: checked
+        ? users.map(function (user) {
+            return String(user.id || user._id);
+          })
+        : []
+    });
+  }
+
+  async function handleAdminBulkPoints(delta) {
+    const state = store.getState();
+    const selectedIds = state.selectedAdminUsers || [];
+
+    if (!state.authToken || !selectedIds.length) {
+      return;
+    }
+
+    try {
+      await Promise.all(selectedIds.map(function (userId) {
+        return updateAdminPoints(state.authToken, userId, delta);
+      }));
+      store.setState({
+        authStatus: "success",
+        authMessage: "Zaktualizowano punkty dla " + selectedIds.length + " graczy."
+      });
+      refreshAdminUsers();
+      refreshLeaderboard();
+    } catch (error) {
+      store.setState({
+        authStatus: "error",
+        authMessage: error.message
+      });
+    }
+  }
+
   async function handleAdminBan(userId, banned) {
     const state = store.getState();
 
@@ -2941,6 +3062,32 @@
       store.setState({
         authStatus: "success",
         authMessage: banned ? "Uzytkownik zostal zbanowany." : "Ban zostal zdjety."
+      });
+      refreshAdminUsers();
+      refreshLeaderboard();
+    } catch (error) {
+      store.setState({
+        authStatus: "error",
+        authMessage: error.message
+      });
+    }
+  }
+
+  async function handleAdminBulkBan(banned) {
+    const state = store.getState();
+    const selectedIds = state.selectedAdminUsers || [];
+
+    if (!state.authToken || !selectedIds.length) {
+      return;
+    }
+
+    try {
+      await Promise.all(selectedIds.map(function (userId) {
+        return updateAdminBan(state.authToken, userId, banned);
+      }));
+      store.setState({
+        authStatus: "success",
+        authMessage: (banned ? "Zbanowano " : "Odbanowano ") + selectedIds.length + " graczy."
       });
       refreshAdminUsers();
       refreshLeaderboard();
@@ -3238,7 +3385,8 @@
         view: state.authView,
         status: state.authStatus,
         message: state.authMessage,
-        adminUsers: state.adminUsers
+        adminUsers: state.adminUsers,
+        selectedAdminUsers: state.selectedAdminUsers
       }, {
         onStart: handleStartGame,
         onLeaderboardOpen: handleLeaderboardOpen,
@@ -3251,7 +3399,11 @@
         onLogout: handleLogout,
         onAdminRefresh: refreshAdminUsers,
         onAdminPoints: handleAdminPoints,
-        onAdminBan: handleAdminBan
+        onAdminBan: handleAdminBan,
+        onAdminToggleSelect: handleAdminToggleSelect,
+        onAdminSelectAll: handleAdminSelectAll,
+        onAdminBulkPoints: handleAdminBulkPoints,
+        onAdminBulkBan: handleAdminBulkBan
       });
       return;
     }

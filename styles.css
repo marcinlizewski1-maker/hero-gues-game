@@ -331,6 +331,43 @@ body::before {
   gap: 14px;
 }
 
+.admin-bulk-panel {
+  display: grid;
+  gap: 14px;
+  margin-bottom: 18px;
+  padding: 18px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: rgba(9, 19, 34, 0.82);
+}
+
+.admin-bulk-actions,
+.admin-user-main,
+.admin-user-selector,
+.admin-select-all {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+}
+
+.admin-user-main {
+  justify-content: space-between;
+}
+
+.admin-user-selector,
+.admin-select-all {
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+
+.admin-user-selector input,
+.admin-select-all input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--accent-strong);
+}
+
 .admin-user-row {
   display: grid;
   gap: 14px;
