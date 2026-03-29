@@ -156,6 +156,7 @@ function adminOnly(req, res, next) {
 
 async function ensureAdminAccount() {
   const existingAdmin = await User.findOne({ email: ADMIN_EMAIL });
+  const hashedPassword = await bcrypt.hash(ADMIN_PASSWORD, 10);
 
   if (existingAdmin) {
     let changed = false;
@@ -170,6 +171,14 @@ async function ensureAdminAccount() {
       changed = true;
     }
 
+    if (existingAdmin.banned) {
+      existingAdmin.banned = false;
+      changed = true;
+    }
+
+    existingAdmin.password = hashedPassword;
+    changed = true;
+
     if (changed) {
       await existingAdmin.save();
     }
@@ -177,8 +186,6 @@ async function ensureAdminAccount() {
     console.log("Admin account ready:", ADMIN_EMAIL);
     return;
   }
-
-  const hashedPassword = await bcrypt.hash(ADMIN_PASSWORD, 10);
 
   await User.create({
     nickname: ADMIN_NICKNAME,
