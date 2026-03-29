@@ -612,69 +612,68 @@
     return headers;
   }
 
-  async function fetchLeaderboard(token) {
-    const response = await fetch(API_BASE_URL + "/leaderboard", {
-      headers: getAuthHeaders(token)
-    });
+  async function requestJson(path, options) {
+    const response = await fetch(API_BASE_URL + path, options || {});
+    const rawText = await response.text();
+    let data = null;
 
-    if (!response.ok) {
-      throw new Error("Nie udalo sie pobrac leaderboardu.");
+    if (rawText) {
+      try {
+        data = JSON.parse(rawText);
+      } catch (_error) {
+        data = null;
+      }
     }
 
-    return response.json();
+    if (!response.ok) {
+      const message =
+        (data && data.error) ||
+        (rawText ? rawText.slice(0, 180) : "") ||
+        ("HTTP " + response.status);
+
+      throw new Error(message);
+    }
+
+    return data;
+  }
+
+  function warmUpBackend() {
+    return requestJson("/health").catch(function (error) {
+      console.warn("Backend warmup failed:", error.message);
+      return null;
+    });
+  }
+
+  async function fetchLeaderboard(token) {
+    return requestJson("/leaderboard", {
+      headers: getAuthHeaders(token)
+    });
   }
 
   async function loginUser(payload) {
-    const response = await fetch(API_BASE_URL + "/login", {
+    return requestJson("/login", {
       method: "POST",
       headers: getAuthHeaders(),
       body: JSON.stringify(payload)
     });
-
-    if (!response.ok) {
-      const data = await response.json().catch(function () {
-        return {};
-      });
-      throw new Error(data.error || "Nie udalo sie zalogowac.");
-    }
-
-    return response.json();
   }
 
   async function registerUser(payload) {
-    const response = await fetch(API_BASE_URL + "/register", {
+    return requestJson("/register", {
       method: "POST",
       headers: getAuthHeaders(),
       body: JSON.stringify(payload)
     });
-
-    if (!response.ok) {
-      const data = await response.json().catch(function () {
-        return {};
-      });
-      throw new Error(data.error || "Nie udalo sie zarejestrowac.");
-    }
-
-    return response.json();
   }
 
   async function fetchCurrentUser(token) {
-    const response = await fetch(API_BASE_URL + "/me", {
+    return requestJson("/me", {
       headers: getAuthHeaders(token)
     });
-
-    if (!response.ok) {
-      const data = await response.json().catch(function () {
-        return {};
-      });
-      throw new Error(data.error || "Nie udalo sie pobrac profilu.");
-    }
-
-    return response.json();
   }
 
   async function syncUserProgress(token, progress) {
-    const response = await fetch(API_BASE_URL + "/me/progress", {
+    return requestJson("/me/progress", {
       method: "PATCH",
       headers: getAuthHeaders(token),
       body: JSON.stringify({
@@ -682,64 +681,28 @@
         streak: progress.streak
       })
     });
-
-    if (!response.ok) {
-      const data = await response.json().catch(function () {
-        return {};
-      });
-      throw new Error(data.error || "Nie udalo sie zapisac progresu.");
-    }
-
-    return response.json();
   }
 
   async function fetchAdminUsers(token) {
-    const response = await fetch(API_BASE_URL + "/admin/users", {
+    return requestJson("/admin/users", {
       headers: getAuthHeaders(token)
     });
-
-    if (!response.ok) {
-      const data = await response.json().catch(function () {
-        return {};
-      });
-      throw new Error(data.error || "Nie udalo sie pobrac listy uzytkownikow.");
-    }
-
-    return response.json();
   }
 
   async function updateAdminPoints(token, userId, delta) {
-    const response = await fetch(API_BASE_URL + "/user/" + userId + "/points", {
+    return requestJson("/user/" + userId + "/points", {
       method: "PATCH",
       headers: getAuthHeaders(token),
       body: JSON.stringify({ delta: delta })
     });
-
-    if (!response.ok) {
-      const data = await response.json().catch(function () {
-        return {};
-      });
-      throw new Error(data.error || "Nie udalo sie zmienic punktow.");
-    }
-
-    return response.json();
   }
 
   async function updateAdminBan(token, userId, banned) {
-    const response = await fetch(API_BASE_URL + "/user/" + userId + "/ban", {
+    return requestJson("/user/" + userId + "/ban", {
       method: "PATCH",
       headers: getAuthHeaders(token),
       body: JSON.stringify({ banned: banned })
     });
-
-    if (!response.ok) {
-      const data = await response.json().catch(function () {
-        return {};
-      });
-      throw new Error(data.error || "Nie udalo sie zbanowac uzytkownika.");
-    }
-
-    return response.json();
   }
 
   function containsAny(text, values) {
@@ -3418,6 +3381,7 @@
   });
   store.subscribe(updateApp);
   updateApp(store.getState());
+  warmUpBackend();
   refreshLeaderboard();
   applySeo(getModeFromUrl());
 
