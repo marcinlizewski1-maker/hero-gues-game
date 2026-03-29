@@ -18,7 +18,9 @@ const ADMIN_EMAIL = "marcin.lizewski2@wp.pl";
 const ADMIN_PASSWORD = "Martillos6";
 const ADMIN_NICKNAME = "MarcinYT";
 const MONGOOSE_CONNECT_OPTIONS = {
-  serverSelectionTimeoutMS: 10000
+  serverSelectionTimeoutMS: 10000,
+  family: 4,
+  autoSelectFamily: false
 };
 const DB_RETRY_DELAY_MS = 15000;
 let isDatabaseReady = false;
