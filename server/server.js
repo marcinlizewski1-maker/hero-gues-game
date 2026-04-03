@@ -620,9 +620,9 @@ function finishRoom(room, reason, winnerId) {
 function emitTimerUpdate(room) {
   const secondsLeft = Math.max(0, Math.ceil((room.roundEndsAt - Date.now()) / 1000));
 
-  io.to(room.code).emit("multiplayer:timer-update", {
-    secondsLeft: secondsLeft,
-    currentTurnUserId: room.wordState ? room.wordState.currentTurnUserId : null
+  io.to(room.code).emit("multiplayer:update-turn", {
+    currentTurnUserId: room.wordState ? room.wordState.currentTurnUserId : null,
+    secondsLeft: secondsLeft
   });
 }
 
@@ -632,10 +632,6 @@ function scheduleTurnTimeout(room) {
   room.roundEndsAt = Date.now() + MULTIPLAYER_TURN_TIME_MS;
   emitRoomState(room);
 
-  io.to(room.code).emit("multiplayer:turn-start", {
-    currentTurnUserId: room.wordState.currentTurnUserId,
-    secondsLeft: Math.ceil(MULTIPLAYER_TURN_TIME_MS / 1000)
-  });
   emitTimerUpdate(room);
 
   room.roundTicker = setInterval(function () {
@@ -726,15 +722,16 @@ async function startRoomIfReady(room) {
     player.lives = MULTIPLAYER_STARTING_LIVES;
     player.answeredRound = false;
     player.ready = false;
+    player.playerReady = false; // Reset for new READY system
   });
   room.wordState = createHangmanState(shuffled[0], room.players);
-  room.status = "playing"; // Set status to playing but don't start timer yet
+  room.status = "loading"; // Set status to loading - wait for players to be ready
   emitRoomState(room);
-  // Wait for players to be ready before starting the game
+  // Wait for players to send player_ready before starting the game
 }
 
 function startGameIfAllReady(room) {
-  if (room.status !== "playing") {
+  if (room.status !== "loading") {
     return;
   }
 
@@ -747,6 +744,7 @@ function startGameIfAllReady(room) {
   }
 
   // All players are ready, start the game
+  room.status = "playing";
   io.to(room.code).emit("multiplayer:start-game");
   scheduleTurnTimeout(room);
 }
@@ -1229,6 +1227,40 @@ io.on("connection", function (socket) {
     player.ready = true;
     emitRoomState(room);
     startGameIfAllReady(room);
+  });
+
+  socket.on("multiplayer:player-ready", function (payload) {
+    const roomCode = String(payload && payload.roomCode || "").trim().toUpperCase();
+    const room = multiplayerRooms.get(roomCode);
+
+    if (!room) {
+      socket.emit("multiplayer:error", { error: "Nie znaleziono pokoju o takim kodzie." });
+      return;
+    }
+
+    const player = room.players.find(function (entry) {
+      return entry.userId === userId;
+    });
+
+    if (!player) {
+      socket.emit("multiplayer:error", { error: "Nie nalezysz do tego pokoju." });
+      return;
+    }
+
+    // Set player as ready for the new READY system
+    player.playerReady = true;
+    emitRoomState(room);
+
+    // Check if both players are ready to start the game
+    const allPlayersReady = room.players.every(function (p) {
+      return p.playerReady;
+    });
+
+    if (allPlayersReady && room.status === "playing") {
+      // Both players are ready, start the game
+      io.to(room.code).emit("multiplayer:start-game");
+      scheduleTurnTimeout(room);
+    }
   });
 
   socket.on("multiplayer:guess-letter", function (payload) {
