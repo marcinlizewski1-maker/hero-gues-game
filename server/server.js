@@ -725,8 +725,29 @@ async function startRoomIfReady(room) {
     player.score = 0;
     player.lives = MULTIPLAYER_STARTING_LIVES;
     player.answeredRound = false;
+    player.ready = false;
   });
   room.wordState = createHangmanState(shuffled[0], room.players);
+  room.status = "playing"; // Set status to playing but don't start timer yet
+  emitRoomState(room);
+  // Wait for players to be ready before starting the game
+}
+
+function startGameIfAllReady(room) {
+  if (room.status !== "playing") {
+    return;
+  }
+
+  const allReady = room.players.every(function (player) {
+    return player.ready;
+  });
+
+  if (!allReady) {
+    return;
+  }
+
+  // All players are ready, start the game
+  io.to(room.code).emit("multiplayer:start-game");
   scheduleTurnTimeout(room);
 }
 
@@ -856,7 +877,8 @@ app.post("/multiplayer/join-room", requireDatabase, authMiddleware, async (req, 
       connected: false,
       score: 0,
       lives: MULTIPLAYER_STARTING_LIVES,
-      answeredRound: false
+      answeredRound: false,
+      ready: false
     });
   }
 
@@ -1184,6 +1206,29 @@ io.on("connection", function (socket) {
     player.connected = true;
     emitRoomState(room);
     startRoomIfReady(room);
+  });
+
+  socket.on("multiplayer:ready", function (payload) {
+    const roomCode = String(payload && payload.roomCode || "").trim().toUpperCase();
+    const room = multiplayerRooms.get(roomCode);
+
+    if (!room) {
+      socket.emit("multiplayer:error", { error: "Nie znaleziono pokoju o takim kodzie." });
+      return;
+    }
+
+    const player = room.players.find(function (entry) {
+      return entry.userId === userId;
+    });
+
+    if (!player) {
+      socket.emit("multiplayer:error", { error: "Nie nalezysz do tego pokoju." });
+      return;
+    }
+
+    player.ready = true;
+    emitRoomState(room);
+    startGameIfAllReady(room);
   });
 
   socket.on("multiplayer:guess-letter", function (payload) {

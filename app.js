@@ -917,7 +917,9 @@
           message: roomState.waitingForOpponent ? "Czekamy na drugiego gracza..." : previous.message,
           selectedOptionId: roomState.status === "playing" ? "" : previous.selectedOptionId,
           gameOver: roomState.status === "finished" ? previous.gameOver : false,
-          gameOverPayload: roomState.status === "finished" ? previous.gameOverPayload : null
+          gameOverPayload: roomState.status === "finished" ? previous.gameOverPayload : null,
+          imageLoaded: roomState.status === "playing" && roomState.hangman ? false : previous.imageLoaded,
+          gameStarted: roomState.status === "playing" ? false : previous.gameStarted
         })
       });
     });
@@ -935,7 +937,17 @@
           message: "Nowa tura. Wybierz litere przed timeoutem.",
           selectedOptionId: "",
           gameOver: false,
-          gameOverPayload: null
+          gameOverPayload: null,
+          gameStarted: true
+        })
+      });
+    });
+
+    socket.on("multiplayer:start-game", function () {
+      const current = store.getState().multiplayer || {};
+      store.setState({
+        multiplayer: Object.assign({}, current, {
+          gameStarted: true
         })
       });
     });
@@ -2960,11 +2972,11 @@
         '<div class="classic-status">' +
           '<article class="status-card"><h3>Przeciwnik</h3><p class="mode-meta">' + (state.opponent ? state.opponent.nickname : "Czekamy...") + '</p></article>' +
           '<article class="status-card"><h3>Tura</h3><p class="mode-meta">' + (hangmanView ? (isMyTurnView ? "Twoja" : "Przeciwnika") : "-") + '</p></article>' +
-          '<article class="status-card"><h3>Timer</h3><p class="mode-meta" id="multiplayerTimerValue">' + (typeof state.secondsLeft === "number" ? state.secondsLeft + " s" : "-") + '</p></article>' +
+          '<article class="status-card"><h3>Timer</h3><p class="mode-meta" id="multiplayerTimerValue">' + (state.gameStarted && typeof state.secondsLeft === "number" ? state.secondsLeft + " s" : "-") + '</p></article>' +
         '</div>' +
         '<div class="multiplayer-score-grid">' + playerCardsView + '</div>' +
         (hangmanView
-          ? '<div class="multiplayer-question-card"><h3>Wisielec na zmiane</h3><p class="mode-description">Gracze zgaduja litery na zmiane. Bledna litera zabiera zycie, a timeout oddaje ture przeciwnikowi.</p>' + (hangmanView.imageUrl ? '<div class="multiplayer-hero-image-wrap"><img class="multiplayer-hero-image" src="' + hangmanView.imageUrl + '" alt="' + (hangmanView.imageAlt || "Hero") + '"></div>' : '') + '<div class="multiplayer-word-mask">' + hangmanView.maskedWord + '</div><p class="mode-meta">Uzyte litery: ' + (guessedLettersView.length ? guessedLettersView.join(", ") : "brak") + '</p><div class="multiplayer-keyboard-caption">' + (isMyTurnView ? "Twoja tura: wybierz litere lub nacisnij klawisz na klawiaturze." : "Czekaj na ruch przeciwnika.") + '</div><div class="multiplayer-options-grid multiplayer-keyboard-grid" data-answer-anchor>' + letterButtonsView + '</div></div>'
+          ? '<div class="multiplayer-question-card"><h3>Wisielec na zmiane</h3><p class="mode-description">Gracze zgaduja litery na zmiane. Bledna litera zabiera zycie, a timeout oddaje ture przeciwnikowi.</p>' + (hangmanView.imageUrl ? (!state.imageLoaded ? '<div class="multiplayer-loading-overlay"><div class="loading-content"><div class="loading-spinner"></div><h2>Czekam na przeciwnika...</h2><p>Ładuję obraz bohatera</p></div></div>' : '') + '<div class="multiplayer-hero-image-wrap"><img class="multiplayer-hero-image" src="' + hangmanView.imageUrl + '" alt="' + (hangmanView.imageAlt || "Hero") + '" onload="handleImageLoad(\'' + state.roomCode + '\')"></div>' : '') + '<div class="multiplayer-word-mask">' + hangmanView.maskedWord + '</div><p class="mode-meta">Uzyte litery: ' + (guessedLettersView.length ? guessedLettersView.join(", ") : "brak") + '</p><div class="multiplayer-keyboard-caption">' + (isMyTurnView ? "Twoja tura: wybierz litere lub nacisnij klawisz na klawiaturze." : "Czekaj na ruch przeciwnika.") + '</div><div class="multiplayer-options-grid multiplayer-keyboard-grid" data-answer-anchor>' + letterButtonsView + '</div></div>'
           : '<div class="placeholder-menu compact-loading"><div><div class="mode-badge">Lobby</div><h2 class="mode-title">Czekamy na start meczu</h2><p>Gdy dwoch graczy bedzie online w pokoju, serwer automatycznie rozpocznie runde.</p></div></div>') +
       '</section>' +
       gameOverOverlayView +
@@ -3690,7 +3702,9 @@
       selectedOptionId: "",
       hangman: null,
       gameOver: false,
-      gameOverPayload: null
+      gameOverPayload: null,
+      imageLoaded: false,
+      gameStarted: false
     }
   });
 
@@ -4978,6 +4992,22 @@
       store.setState({ loading: false });
     }
   }, 5000);
+
+  function handleImageLoad(roomCode) {
+    const current = store.getState().multiplayer || {};
+    if (!current.imageLoaded) {
+      store.setState({
+        multiplayer: Object.assign({}, current, {
+          imageLoaded: true
+        })
+      });
+      if (multiplayerSocket) {
+        multiplayerSocket.emit("multiplayer:ready", { roomCode: roomCode });
+      }
+    }
+  }
+
+  window.handleImageLoad = handleImageLoad;
 }());
 
 
