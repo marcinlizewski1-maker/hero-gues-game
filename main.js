@@ -8,7 +8,8 @@ const store = createStore({
   activeView: "menu",
   activeModeId: null,
   heroCollection: null,
-  dataStatus: "loading"
+  loading: true,
+  characters: []
 });
 
 const menuView = document.querySelector("#menuView");
@@ -123,16 +124,23 @@ homeButton.addEventListener("click", openMenu);
 store.subscribe(updateApp);
 updateApp(store.getState());
 
-loadSuperheroes()
-  .then((heroCollection) => {
+async function loadCharacters() {
+  try {
+    const response = await Promise.race([
+      loadSuperheroes(),
+      new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), 5000))
+    ]);
     store.setState({
-      heroCollection,
-      dataStatus: "ready"
+      heroCollection: response,
+      characters: response.heroes || [],
+      loading: false
     });
-  })
-  .catch((error) => {
-    console.error("Superhero data load failed:", error);
+  } catch (error) {
+    console.error("Characters load failed:", error);
     store.setState({
-      dataStatus: "error"
+      loading: false
     });
-  });
+  }
+}
+
+loadCharacters();

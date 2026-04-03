@@ -300,6 +300,49 @@ function preloadSuperheroes() {
     });
 }
 
+const POPULAR_HERO_NAMES = new Set([
+  "Batman", "Superman", "Wonder Woman", "Flash", "Green Lantern", "Aquaman", "Cyborg", "Robin", "Nightwing", "Batgirl", "Catwoman", "Harley Quinn", "Joker", "Lex Luthor", "Supergirl", "Green Arrow", "Black Canary", "Martian Manhunter", "Shazam", "Constantine", "Raven", "Starfire", "Beast Boy", "Blue Beetle", "Hawkman", "Hawkgirl", "Zatanna", "Poison Ivy", "Bane", "Deathstroke", "Ra's Al Ghul", "Darkseid", "Doomsday", "Brainiac", "Penguin", "Riddler", "Two-Face", "Scarecrow", "Red Hood", "Red Robin", "Doctor Fate", "Black Adam", "Mera", "Booster Gold", "Static", "Spider-Man", "Iron Man", "Captain America", "Thor", "Hulk", "Black Widow", "Hawkeye", "Wolverine", "Cyclops", "Jean Grey", "Storm", "Rogue", "Gambit", "Iceman", "Beast", "Nightcrawler", "Professor X", "Magneto", "Mystique", "Deadpool", "Punisher", "Daredevil", "Elektra", "Blade", "Ghost Rider", "Doctor Strange", "Scarlet Witch", "Vision", "Falcon", "Winter Soldier", "Black Panther", "Captain Marvel", "Ant-Man", "Wasp", "She-Hulk", "Moon Knight", "Nova", "Silver Surfer", "Thanos", "Loki", "Venom", "Carnage", "Green Goblin", "Doctor Octopus", "Kingpin", "Ultron", "Apocalypse", "Cable", "Domino", "Colossus", "Psylocke", "Kitty Pryde", "Emma Frost", "Luke Cage"
+]);
+
+function isAllowedPublisher(hero) {
+  const publisher = normalizePublisher(hero.biography && hero.biography.publisher);
+  return publisher === "Marvel Comics" || publisher === "DC Comics";
+}
+
+function isPopularHero(hero) {
+  return POPULAR_HERO_NAMES.has(hero.name);
+}
+
+function toHeroRecord(hero) {
+  return {
+    id: hero.id,
+    name: hero.name,
+    slug: hero.slug,
+    gender: hero.appearance?.gender ?? "Unknown",
+    publisher: hero.biography?.publisher ?? "Unknown",
+    universe: hero.biography?.publisher ?? "Unknown",
+    fullName: hero.biography?.fullName || hero.name,
+    alignment: hero.biography?.alignment ?? "unknown",
+    intelligence: hero.powerstats?.intelligence ?? 0,
+    strength: hero.powerstats?.strength ?? 0,
+    speed: hero.powerstats?.speed ?? 0,
+    durability: hero.powerstats?.durability ?? 0,
+    power: hero.powerstats?.power ?? 0,
+    combat: hero.powerstats?.combat ?? 0
+  };
+}
+
+function buildHeroCollection(allHeroes) {
+  const publisherHeroes = allHeroes.filter(isAllowedPublisher);
+  const popularHeroes = publisherHeroes.filter(isPopularHero).slice(0, 150);
+
+  if (popularHeroes.length < 100) {
+    return publisherHeroes.slice(0, 150).map(toHeroRecord);
+  }
+
+  return popularHeroes.map(toHeroRecord);
+}
+
 function normalizePublisher(publisher) {
   return String(publisher || "").trim();
 }
@@ -704,6 +747,25 @@ app.get("/superheroes", async (_req, res) => {
       return res.json(superheroCache);
     }
 
+    return res.status(500).json({ error: "Nie udalo sie pobrac danych bohaterow." });
+  }
+});
+
+app.get("/api/characters", async (_req, res) => {
+  res.set("Cache-Control", "public, max-age=3600, stale-while-revalidate=86400");
+
+  try {
+    const allHeroes = await fetchAndCacheSuperheroes();
+    const heroes = buildHeroCollection(allHeroes);
+    const data = {
+      fetchedAt: new Date().toISOString(),
+      total: heroes.length,
+      publishers: ["Marvel Comics", "DC Comics"],
+      heroes
+    };
+    return res.json(data);
+  } catch (error) {
+    console.error("Characters API failed:", error);
     return res.status(500).json({ error: "Nie udalo sie pobrac danych bohaterow." });
   }
 });

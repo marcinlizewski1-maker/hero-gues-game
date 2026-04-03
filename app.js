@@ -3662,6 +3662,8 @@
     activeSection: initialModeFromUrl ? "game" : "home",
     activeModeId: null,
     heroCollection: null,
+    loading: true,
+    characters: [],
     dataStatus: "loading",
     progress: loadSavedProgress(),
     leaderboard: [],
@@ -4665,6 +4667,26 @@
   }
 
   function updateApp(state) {
+    // Manage loading overlay
+    const loadingOverlay = document.getElementById("loadingOverlay");
+    const loadingBar = document.getElementById("loadingBar");
+    if (loadingOverlay) {
+      if (state.loading) {
+        loadingOverlay.classList.remove("hidden");
+        // Simulate progress
+        let progress = 0;
+        const progressInterval = setInterval(() => {
+          progress += Math.random() * 15;
+          if (progress > 90) progress = 90;
+          if (loadingBar) loadingBar.style.width = progress + "%";
+          if (!state.loading) clearInterval(progressInterval);
+        }, 200);
+      } else {
+        loadingOverlay.classList.add("hidden");
+        if (loadingBar) loadingBar.style.width = "100%";
+      }
+    }
+
     renderProgressPanel(state.progress);
     renderMenu(menuView, gameModes, state.activeModeId, openMode);
     renderAppNavbar(appNavbar, state.activeSection || "home", handleNavigate);
@@ -4930,6 +4952,8 @@
       const syncedProgress = progressionManager.syncDailyChallenge(heroCollection.heroes);
       store.setState({
         heroCollection: heroCollection,
+        characters: heroCollection.heroes || [],
+        loading: false,
         dataStatus: "ready",
         progress: syncedProgress
       });
@@ -4941,8 +4965,19 @@
     })
     .catch(function (error) {
       console.error("Superhero data load failed:", error);
-      store.setState({ dataStatus: "error" });
+      store.setState({ 
+        loading: false,
+        dataStatus: "error" 
+      });
     });
+
+  // Timeout fallback
+  setTimeout(function () {
+    if (store.getState().loading) {
+      console.warn("Loading timeout reached, hiding loading screen");
+      store.setState({ loading: false });
+    }
+  }, 5000);
 }());
 
 
