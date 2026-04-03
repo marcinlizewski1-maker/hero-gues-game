@@ -2948,26 +2948,27 @@
     '</section>';
   }
 
-  function renderMultiplayerView(container, multiplayerState, handlers) {
+  function renderMultiplayerView(container, multiplayerState, currentUser, handlers) {
     const state = multiplayerState || {};
     const hangmanView = state.hangman || null;
     const meView = state.me || null;
     const gameOverView = state.status === "finished" || Boolean(state.result);
     const gameOverPayloadView = state.gameOverPayload || null;
+    const myId = (currentUser && currentUser.id) || (meView && meView.id) || null;
     const didWinView = Boolean(
       gameOverPayloadView &&
-      meView &&
+      myId &&
       gameOverPayloadView.winner &&
-      gameOverPayloadView.winner === meView.id
+      gameOverPayloadView.winner === myId
     );
     const guessedLettersView = hangmanView && Array.isArray(hangmanView.usedLetters)
       ? hangmanView.usedLetters
       : hangmanView && Array.isArray(hangmanView.guessedLetters)
         ? hangmanView.guessedLetters
         : [];
-    const isMyTurnView = Boolean(meView && hangmanView && hangmanView.currentTurnUserId === meView.id && state.status === "playing" && !gameOverView);
+    const isMyTurnView = Boolean(myId && hangmanView && hangmanView.currentTurnUserId === myId && state.status === "playing" && !gameOverView);
     const playerCardsView = (state.players || []).map(function (player) {
-      const isMePlayer = state.me && player.id === state.me.id;
+      const isMePlayer = myId && player.id === myId;
       return '<article class="status-card multiplayer-score-card"><h3>' + (isMePlayer ? player.nickname + " (Ty)" : player.nickname) + '</h3><p class="mode-meta">' + player.score + ' pkt • zycia ' + player.lives + '</p><span class="' + (player.connected ? 'multiplayer-connected' : 'multiplayer-disconnected') + '">' + (player.connected ? 'online' : 'offline') + '</span></article>';
     }).join("");
     const letterButtonsView = hangmanView
@@ -4838,7 +4839,7 @@
     if (state.activeSection === "multiplayer" && state.activeView === "multiplayer") {
       applySeo(null);
       homeButton.hidden = false;
-      renderMultiplayerView(gameContainer, state.multiplayer, {
+      renderMultiplayerView(gameContainer, state.multiplayer, state.currentUser, {
         onBack: handleExitMultiplayer,
         onAnswer: handleMultiplayerAnswer,
         onPlayAgain: handleMultiplayerPlayAgain,
