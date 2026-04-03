@@ -1182,10 +1182,10 @@
     const teamRules = [
       { team: "Justice League", tokens: ["justice league", "jla", "justice league of america"] },
       { team: "Bat Family", tokens: ["bat family", "batman family", "wayne family"] },
+      { team: "Avengers", tokens: ["avengers", "new avengers", "mighty avengers", "west coast avengers"] },
       { team: "Teen Titans", tokens: ["teen titans", "titans"] },
       { team: "Suicide Squad", tokens: ["suicide squad", "task force x"] },
       { team: "Green Lantern Corps", tokens: ["green lantern corps"] },
-      { team: "Avengers", tokens: ["avengers", "new avengers", "mighty avengers", "west coast avengers"] },
       { team: "X-Men", tokens: ["x-men", "astonishing x-men", "uncanny x-men"] },
       { team: "X-Force", tokens: ["x-force"] },
       { team: "Fantastic Four", tokens: ["fantastic four"] },
