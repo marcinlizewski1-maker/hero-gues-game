@@ -956,9 +956,11 @@
     socket.on("multiplayer:timer-update", function (payload) {
       const current = store.getState().multiplayer || {};
       const nextSecondsLeft = typeof payload.secondsLeft === "number" ? payload.secondsLeft : current.secondsLeft || 0;
-      if (current) {
-        current.secondsLeft = nextSecondsLeft;
-      }
+      store.setState({
+        multiplayer: Object.assign({}, current, {
+          secondsLeft: nextSecondsLeft
+        })
+      });
       updateMultiplayerTimerDisplay(nextSecondsLeft);
     });
 
@@ -2954,7 +2956,7 @@
     const meView = state.me || null;
     const gameOverView = state.status === "finished" || Boolean(state.result);
     const gameOverPayloadView = state.gameOverPayload || null;
-    const myId = (currentUser && currentUser.id) || (meView && meView.id) || null;
+    const myId = currentUser && currentUser.id;
     const didWinView = Boolean(
       gameOverPayloadView &&
       myId &&
@@ -5068,14 +5070,17 @@
   function handleImageLoad(roomCode) {
     const current = store.getState().multiplayer || {};
     if (!current.imageLoaded) {
-      store.setState({
-        multiplayer: Object.assign({}, current, {
-          imageLoaded: true
-        })
-      });
-      if (multiplayerSocket) {
-        multiplayerSocket.emit("multiplayer:ready", { roomCode: roomCode });
-      }
+      // Opóźnij ukrycie overlay o 300ms, aby uniknąć migotania
+      setTimeout(() => {
+        store.setState({
+          multiplayer: Object.assign({}, store.getState().multiplayer || {}, {
+            imageLoaded: true
+          })
+        });
+        if (multiplayerSocket) {
+          multiplayerSocket.emit("multiplayer:ready", { roomCode: roomCode });
+        }
+      }, 300);
     }
   }
 
