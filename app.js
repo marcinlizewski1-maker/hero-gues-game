@@ -919,7 +919,8 @@
           gameOver: roomState.status === "finished" ? previous.gameOver : false,
           gameOverPayload: roomState.status === "finished" ? previous.gameOverPayload : null,
           imageLoaded: roomState.status === "playing" && roomState.hangman ? false : previous.imageLoaded,
-          gameStarted: roomState.status === "playing" ? false : previous.gameStarted
+          gameStarted: roomState.status === "playing" ? false : previous.gameStarted,
+          usedFullGuess: roomState.status === "playing" ? false : previous.usedFullGuess
         })
       });
     });
@@ -995,6 +996,10 @@
               ? (isWinner ? "Zgadles cale slowo i wygrywasz." : "Przeciwnik odgadl cale slowo.")
               : result.reason === "out_of_lives"
                 ? (isWinner ? "Przeciwnik stracil wszystkie zycia. Wygrywasz." : "Straciles wszystkie zycia.")
+              : result.reason === "full_guess_correct"
+                ? (isWinner ? "Zgadles cala odpowiedz! Natychmiastowa wygrana." : "Przeciwnik zgadl cala odpowiedz.")
+              : result.reason === "full_guess_wrong"
+                ? (isWinner ? "Przeciwnik pomylil sie z pelna odpowiedzia. Wygrywasz." : "Bledna pelna odpowiedz. Natychmiastowa przegrana.")
             : isWinner
               ? "Wygrywasz pojedynek 1v1."
               : result.winnerId
@@ -1010,6 +1015,21 @@
         multiplayer: Object.assign({}, current, {
           gameOver: true,
           gameOverPayload: payload || null
+        })
+      });
+    });
+
+    socket.on("multiplayer:guess-full-result", function (payload) {
+      const current = store.getState().multiplayer || {};
+      const isCorrect = Boolean(payload.correct);
+      const byUserId = payload.byUserId;
+      const me = current.me;
+
+      store.setState({
+        multiplayer: Object.assign({}, current, {
+          message: isCorrect
+            ? (me && byUserId === me.id ? "Zgadles cala odpowiedz! Wygrywasz natychmiast." : "Przeciwnik zgadl cala odpowiedz i wygrywa.")
+            : (me && byUserId === me.id ? "Bledna pelna odpowiedz. Przegrywasz natychmiast." : "Przeciwnik pomylil sie z pelna odpowiedzia.")
         })
       });
     });
@@ -2976,7 +2996,7 @@
         '</div>' +
         '<div class="multiplayer-score-grid">' + playerCardsView + '</div>' +
         (hangmanView
-          ? '<div class="multiplayer-question-card"><h3>Wisielec na zmiane</h3><p class="mode-description">Gracze zgaduja litery na zmiane. Bledna litera zabiera zycie, a timeout oddaje ture przeciwnikowi.</p>' + (hangmanView.imageUrl ? (!state.imageLoaded ? '<div class="multiplayer-loading-overlay"><div class="loading-content"><div class="loading-spinner"></div><h2>Czekam na przeciwnika...</h2><p>Ładuję obraz bohatera</p></div></div>' : '') + '<div class="multiplayer-hero-image-wrap"><img class="multiplayer-hero-image" src="' + hangmanView.imageUrl + '" alt="' + (hangmanView.imageAlt || "Hero") + '" onload="handleImageLoad(\'' + state.roomCode + '\')"></div>' : '') + '<div class="multiplayer-word-mask">' + hangmanView.maskedWord + '</div><p class="mode-meta">Uzyte litery: ' + (guessedLettersView.length ? guessedLettersView.join(", ") : "brak") + '</p><div class="multiplayer-keyboard-caption">' + (isMyTurnView ? "Twoja tura: wybierz litere lub nacisnij klawisz na klawiaturze." : "Czekaj na ruch przeciwnika.") + '</div><div class="multiplayer-options-grid multiplayer-keyboard-grid" data-answer-anchor>' + letterButtonsView + '</div></div>'
+          ? '<div class="multiplayer-question-card"><h3>Wisielec na zmiane</h3><p class="mode-description">Gracze zgaduja litery na zmiane. Bledna litera zabiera zycie, a timeout oddaje ture przeciwnikowi.</p>' + (hangmanView.imageUrl ? (!state.imageLoaded ? '<div class="multiplayer-loading-overlay"><div class="loading-content"><div class="loading-spinner"></div><h2>Czekam na przeciwnika...</h2><p>Ładuję obraz bohatera</p></div></div>' : '') + '<div class="multiplayer-hero-image-wrap"><img class="multiplayer-hero-image" src="' + hangmanView.imageUrl + '" alt="' + (hangmanView.imageAlt || "Hero") + '" onload="handleImageLoad(\'' + state.roomCode + '\')"></div>' : '') + '<div class="multiplayer-word-mask">' + hangmanView.maskedWord + '</div><p class="mode-meta">Uzyte litery: ' + (guessedLettersView.length ? guessedLettersView.join(", ") : "brak") + '</p><div class="multiplayer-keyboard-caption">' + (isMyTurnView ? "Twoja tura: wybierz litere lub nacisnij klawisz na klawiaturze." : "Czekaj na ruch przeciwnika.") + '</div><div class="multiplayer-options-grid multiplayer-keyboard-grid" data-answer-anchor>' + letterButtonsView + '</div>' + (isMyTurnView && !state.usedFullGuess && !gameOverView ? '<div class="multiplayer-full-guess"><label for="fullGuessInput">Zgadnij całość (jedna próba):</label><div class="multiplayer-full-guess-controls"><input type="text" id="fullGuessInput" maxlength="50" placeholder="Wpisz pełną nazwę bohatera..." ' + (gameOverView ? 'disabled' : '') + '><button class="action-button" type="button" id="fullGuessButton" ' + (gameOverView ? 'disabled' : '') + '>Zgadnij całość</button></div></div>' : '') + '</div>'
           : '<div class="placeholder-menu compact-loading"><div><div class="mode-badge">Lobby</div><h2 class="mode-title">Czekamy na start meczu</h2><p>Gdy dwoch graczy bedzie online w pokoju, serwer automatycznie rozpocznie runde.</p></div></div>') +
       '</section>' +
       gameOverOverlayView +
@@ -2995,6 +3015,15 @@
     const gameOverMenuButton = container.querySelector("#gameOverMenuButton");
     if (gameOverMenuButton) {
       gameOverMenuButton.addEventListener("click", handlers.onBack);
+    }
+    const fullGuessButton = container.querySelector("#fullGuessButton");
+    if (fullGuessButton) {
+      fullGuessButton.addEventListener("click", function () {
+        const input = container.querySelector("#fullGuessInput");
+        if (input && input.value.trim()) {
+          handlers.onFullGuess(input.value.trim());
+        }
+      });
     }
     return;
 
@@ -3704,7 +3733,8 @@
       gameOver: false,
       gameOverPayload: null,
       imageLoaded: false,
-      gameStarted: false
+      gameStarted: false,
+      usedFullGuess: false
     }
   });
 
@@ -4064,6 +4094,46 @@
       multiplayer: Object.assign({}, multiplayer, {
         selectedOptionId: normalizedLetter,
         message: "Odpowiedz wyslana. Czekamy na przeciwnika lub timeout."
+      })
+    });
+  }
+
+  function handleMultiplayerFullGuess(guess) {
+    const state = store.getState();
+    const multiplayer = state.multiplayer || {};
+    const hangman = multiplayer.hangman || null;
+    const gameOver = multiplayer.status === "finished" || Boolean(multiplayer.result);
+    const isMyTurn = Boolean(
+      state.currentUser &&
+      hangman &&
+      hangman.currentTurnUserId === state.currentUser.id &&
+      multiplayer.status === "playing"
+    );
+
+    if (!multiplayerSocket || !multiplayer.roomCode || multiplayer.status !== "playing") {
+      return;
+    }
+
+    if (gameOver || !isMyTurn || multiplayer.usedFullGuess) {
+      return;
+    }
+
+    const normalizedGuess = String(guess || "").trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
+
+    if (!normalizedGuess) {
+      return;
+    }
+
+    multiplayerSocket.emit("multiplayer:guess-full", {
+      roomCode: multiplayer.roomCode,
+      guess: normalizedGuess
+    });
+
+    store.setState({
+      multiplayer: Object.assign({}, multiplayer, {
+        usedFullGuess: true,
+        message: "Pelna odpowiedz wyslana. Czekamy na wynik... (high risk!)",
+        selectedOptionId: ""
       })
     });
   }
@@ -4771,7 +4841,8 @@
       renderMultiplayerView(gameContainer, state.multiplayer, {
         onBack: handleExitMultiplayer,
         onAnswer: handleMultiplayerAnswer,
-        onPlayAgain: handleMultiplayerPlayAgain
+        onPlayAgain: handleMultiplayerPlayAgain,
+        onFullGuess: handleMultiplayerFullGuess
       });
       scrollGameContainerToAnswerArea();
       return;

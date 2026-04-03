@@ -1312,6 +1312,59 @@ io.on("connection", function (socket) {
     scheduleTurnTimeout(room);
   });
 
+  socket.on("multiplayer:guess-full", function (payload) {
+    const roomCode = String(payload && payload.roomCode || "").trim().toUpperCase();
+    const guess = String(payload && payload.guess || "").trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
+    const room = multiplayerRooms.get(roomCode);
+
+    if (!room || room.status !== "playing" || !room.wordState) {
+      socket.emit("multiplayer:error", { error: "Ten pojedynek nie jest aktywny." });
+      return;
+    }
+
+    const player = room.players.find(function (entry) {
+      return entry.userId === userId;
+    });
+
+    if (!player) {
+      socket.emit("multiplayer:error", { error: "Nie nalezysz do tego pokoju." });
+      return;
+    }
+
+    if (room.wordState.currentTurnUserId !== userId) {
+      socket.emit("multiplayer:error", { error: "To nie jest Twoja tura." });
+      return;
+    }
+
+    if (!guess) {
+      socket.emit("multiplayer:error", { error: "Podaj pelna odpowiedz." });
+      return;
+    }
+
+    const opponent = room.players.find(function (entry) {
+      return entry.userId !== userId;
+    });
+    const normalizedWord = normalizeHangmanWord(room.wordState.answerName);
+    const isCorrect = normalizedWord === guess;
+
+    clearRoomTimers(room);
+
+    io.to(room.code).emit("multiplayer:guess-full-result", {
+      correct: isCorrect,
+      byUserId: player.userId,
+      message: isCorrect
+        ? player.nickname + " zgadl cala odpowiedz i wygrywa!"
+        : player.nickname + " pomylil sie z pelna odpowiedzia i przegrywa."
+    });
+
+    if (isCorrect) {
+      player.score += 5; // Bonus for full guess
+      finishRoom(room, "full_guess_correct", player.userId);
+    } else {
+      finishRoom(room, "full_guess_wrong", opponent ? opponent.userId : null);
+    }
+  });
+
   socket.on("disconnect", function () {
     socketUserMap.delete(userId);
 
