@@ -2956,7 +2956,7 @@
     const meView = state.me || null;
     const gameOverView = state.status === "finished" || Boolean(state.result);
     const gameOverPayloadView = state.gameOverPayload || null;
-    const myId = currentUser && currentUser.id;
+    const myId = meView && meView.id;
     const didWinView = Boolean(
       gameOverPayloadView &&
       myId &&
@@ -5070,7 +5070,7 @@
   function handleImageLoad(roomCode) {
     const current = store.getState().multiplayer || {};
     if (!current.imageLoaded) {
-      // Opóźnij ukrycie overlay o 300ms, aby uniknąć migotania
+      // Opóźnij ukrycie overlay o 1000ms, aby uniknąć migotania
       setTimeout(() => {
         store.setState({
           multiplayer: Object.assign({}, store.getState().multiplayer || {}, {
@@ -5080,7 +5080,7 @@
         if (multiplayerSocket) {
           multiplayerSocket.emit("multiplayer:ready", { roomCode: roomCode });
         }
-      }, 300);
+      }, 1000);
     }
   }
 
