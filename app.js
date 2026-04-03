@@ -901,29 +901,43 @@
 
     socket.on("multiplayer:state", function (roomState) {
       const previous = store.getState().multiplayer || {};
-      store.setState({
-        multiplayer: Object.assign({}, previous, {
-          status: roomState.status,
-          roomCode: roomState.code,
-          players: roomState.players || [],
-          me: roomState.me || previous.me || null,
-          opponent: roomState.opponent || null,
-          hangman: roomState.hangman || null,
-          question: null,
-          roundEndsAt: roomState.roundEndsAt || null,
-          secondsLeft: typeof roomState.secondsLeft === "number" ? roomState.secondsLeft : previous.secondsLeft || 0,
-          waitingForOpponent: Boolean(roomState.waitingForOpponent),
-          result: roomState.result || null,
-          message: roomState.waitingForOpponent ? "Czekamy na drugiego gracza..." : previous.message,
-          selectedOptionId: roomState.status === "playing" ? "" : previous.selectedOptionId,
-          gameOver: roomState.status === "finished" ? previous.gameOver : false,
-          gameOverPayload: roomState.status === "finished" ? previous.gameOverPayload : null,
-          imageLoaded: roomState.status === "loading" || (roomState.status === "playing" && roomState.hangman) ? false : previous.imageLoaded,
-          gameStarted: roomState.status === "playing" ? false : previous.gameStarted,
-          usedFullGuess: roomState.status === "loading" || roomState.status === "playing" ? false : previous.usedFullGuess,
-          playerReady: roomState.status === "loading" ? previous.playerReady : false
-        })
+      
+      const newState = Object.assign({}, previous, {
+        status: roomState.status,
+        roomCode: roomState.code,
+        players: roomState.players || [],
+        me: roomState.me || previous.me || null,
+        opponent: roomState.opponent || null,
+        hangman: roomState.hangman || null,
+        question: null,
+        roundEndsAt: roomState.roundEndsAt || null,
+        secondsLeft: typeof roomState.secondsLeft === "number" ? roomState.secondsLeft : previous.secondsLeft || 0,
+        waitingForOpponent: Boolean(roomState.waitingForOpponent),
+        result: roomState.result || null,
+        message: roomState.waitingForOpponent ? "Czekamy na drugiego gracza..." : previous.message,
+        selectedOptionId: roomState.status === "playing" ? "" : previous.selectedOptionId,
+        gameOver: roomState.status === "finished" ? previous.gameOver : false,
+        gameOverPayload: roomState.status === "finished" ? previous.gameOverPayload : null,
+        imageLoaded: roomState.status === "loading" || (roomState.status === "playing" && roomState.hangman) ? false : previous.imageLoaded,
+        gameStarted: roomState.status === "playing" ? false : previous.gameStarted,
+        usedFullGuess: roomState.status === "loading" || roomState.status === "playing" ? false : previous.usedFullGuess,
+        playerReady: roomState.status === "loading" ? previous.playerReady : false
       });
+
+      // Only update if critical fields changed
+      if (
+        previous.status !== newState.status ||
+        previous.roomCode !== newState.roomCode ||
+        previous.hangman !== newState.hangman ||
+        previous.opponent !== newState.opponent ||
+        previous.me !== newState.me ||
+        JSON.stringify(previous.players) !== JSON.stringify(newState.players) ||
+        previous.result !== newState.result ||
+        previous.secondsLeft !== newState.secondsLeft ||
+        previous.message !== newState.message
+      ) {
+        store.setState({ multiplayer: newState });
+      }
     });
 
     socket.on("multiplayer:turn-start", function (payload) {
@@ -957,11 +971,17 @@
     socket.on("multiplayer:update-turn", function (payload) {
       const current = store.getState().multiplayer || {};
       const nextSecondsLeft = typeof payload.secondsLeft === "number" ? payload.secondsLeft : current.secondsLeft || 0;
-      store.setState({
-        multiplayer: Object.assign({}, current, {
-          secondsLeft: nextSecondsLeft
-        })
-      });
+      
+      // Only update state if seconds changed (avoid re-renders on every tick)
+      if (current.secondsLeft !== nextSecondsLeft) {
+        store.setState({
+          multiplayer: Object.assign({}, current, {
+            secondsLeft: nextSecondsLeft
+          })
+        });
+      }
+      
+      // Always update DOM directly for timer (no re-render)
       updateMultiplayerTimerDisplay(nextSecondsLeft);
     });
 
@@ -2952,6 +2972,35 @@
   }
 
   function renderMultiplayerView(container, multiplayerState, currentUser, handlers) {
+    // Cache last state to avoid unnecessary re-renders
+    // Only compare fields that affect UI structure (not timer/cosmetic updates)
+    if (!renderMultiplayerView.lastState) {
+      renderMultiplayerView.lastState = null;
+    }
+    
+    const compareState = {
+      status: multiplayerState.status,
+      roomCode: multiplayerState.roomCode,
+      hangman: multiplayerState.hangman ? {
+        answerName: multiplayerState.hangman.answerName,
+        maskedWord: multiplayerState.hangman.maskedWord,
+        guessedLetters: multiplayerState.hangman.guessedLetters
+      } : null,
+      players: multiplayerState.players ? multiplayerState.players.length : 0,
+      me: multiplayerState.me ? multiplayerState.me.id : null,
+      opponent: multiplayerState.opponent ? multiplayerState.opponent.id : null,
+      result: multiplayerState.result,
+      usedFullGuess: multiplayerState.usedFullGuess,
+      playerReady: multiplayerState.playerReady
+    };
+    
+    const currentStateKey = JSON.stringify(compareState);
+    if (renderMultiplayerView.lastState === currentStateKey) {
+      // State hasn't meaningfully changed, skip render
+      return;
+    }
+    renderMultiplayerView.lastState = currentStateKey;
+    
     const state = multiplayerState || {};
     const hangmanView = state.hangman || null;
     const meView = state.me || null;
@@ -2986,6 +3035,27 @@
       ? '<div class="multiplayer-gameover-overlay"><div class="multiplayer-gameover-card"><div class="mode-badge">Game Over</div><h2>' + (didWinView ? "Wygrales" : "Przegrales") + '</h2><p class="mode-description">Poprawne haslo: <strong>' + (gameOverPayloadView.correctWord || "-") + '</strong></p><div class="multiplayer-gameover-actions"><button class="action-button" type="button" id="playAgainButton">Zagraj ponownie</button><button class="action-button secondary-button" type="button" id="gameOverMenuButton">Wyjdz do menu</button></div></div></div>'
       : "";
 
+    const loadingOverlayView = state.status === "loading"
+      ? '<div class="multiplayer-loading-overlay"><div class="loading-content"><div class="loading-spinner"></div><h2>Przygotowuję grę...</h2><p>Ładuję obraz bohatera</p></div></div>'
+      : '';
+
+    const readyButtonHTML = state.status === "loading"
+      ? '<div class="multiplayer-ready-section"><button class="action-button" type="button" id="playerReadyButton" ' + (state.playerReady ? 'disabled' : '') + '>' + (state.playerReady ? 'Gotowy - czekaj na przeciwnika' : 'Gotowy do gry') + '</button></div>'
+      : '';
+
+    const gameContentHTML = hangmanView && (state.status === "playing" || state.status === "loading")
+      ? '<div class="multiplayer-question-card"><h3>Wisielec na zmiane</h3><p class="mode-description">Gracze zgaduja litery na zmiane. Bledna litera zabiera zycie, a timeout oddaje ture przeciwnikowi.</p>' +
+        (hangmanView.imageUrl ? '<div class="multiplayer-hero-image-wrap"><img class="multiplayer-hero-image" src="' + hangmanView.imageUrl + '" alt="' + (hangmanView.imageAlt || "Hero") + '" ' + (state.status === "loading" ? 'style="display:none;"' : '') + '></div>' : '') +
+        '<div class="multiplayer-word-mask">' + hangmanView.maskedWord + '</div>' +
+        '<p class="mode-meta">Uzyte litery: ' + (guessedLettersView.length ? guessedLettersView.join(", ") : "brak") + '</p>' +
+        '<div class="multiplayer-keyboard-caption">' + (state.status === "loading" ? "Czekaj na gotowość obu graczy..." : (isMyTurnView ? "Twoja tura: wybierz litere lub nacisnij klawisz na klawiaturze." : "Czekaj na ruch przeciwnika.")) + '</div>' +
+        readyButtonHTML +
+        '<div class="multiplayer-options-grid multiplayer-keyboard-grid" data-answer-anchor>' + (state.status === "loading" ? "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("").map(function (letter) { return '<button class="multiplayer-key is-disabled" type="button" disabled aria-label="Litera ' + letter + '">' + letter + '</button>'; }).join("") : letterButtonsView) + '</div>' +
+        (state.status === "playing" && isMyTurnView && !state.usedFullGuess && !gameOverView ? '<div class="multiplayer-full-guess"><label for="fullGuessInput">Zgadnij całość (jedna próba):</label><div class="multiplayer-full-guess-controls"><input type="text" id="fullGuessInput" maxlength="50" placeholder="Wpisz pełną nazwę bohatera..." ' + (gameOverView ? 'disabled' : '') + '><button class="action-button" type="button" id="fullGuessButton" ' + (gameOverView ? 'disabled' : '') + '>Zgadnij całość</button></div></div>' : '') +
+        loadingOverlayView +
+        '</div>'
+      : '<div class="placeholder-menu compact-loading"><div><div class="mode-badge">Lobby</div><h2 class="mode-title">Czekamy na start meczu</h2><p>Gdy dwoch graczy bedzie online w pokoju, serwer automatycznie rozpocznie runde.</p></div></div>';
+
     container.innerHTML = '<div class="content-grid">' +
       '<div class="content-header">' +
         '<div><div class="mode-badge">Multiplayer 1v1</div><h2 class="mode-title">Pokoj ' + (state.roomCode || "---") + '</h2></div>' +
@@ -2999,11 +3069,7 @@
           '<article class="status-card"><h3>Timer</h3><p class="mode-meta" id="multiplayerTimerValue">' + (state.gameStarted && typeof state.secondsLeft === "number" ? state.secondsLeft + " s" : "-") + '</p></article>' +
         '</div>' +
         '<div class="multiplayer-score-grid">' + playerCardsView + '</div>' +
-        (hangmanView && state.status === "playing"
-          ? '<div class="multiplayer-question-card"><h3>Wisielec na zmiane</h3><p class="mode-description">Gracze zgaduja litery na zmiane. Bledna litera zabiera zycie, a timeout oddaje ture przeciwnikowi.</p>' + (hangmanView.imageUrl ? '<div class="multiplayer-hero-image-wrap"><img class="multiplayer-hero-image" src="' + hangmanView.imageUrl + '" alt="' + (hangmanView.imageAlt || "Hero") + '"></div>' : '') + '<div class="multiplayer-word-mask">' + hangmanView.maskedWord + '</div><p class="mode-meta">Uzyte litery: ' + (guessedLettersView.length ? guessedLettersView.join(", ") : "brak") + '</p><div class="multiplayer-keyboard-caption">' + (isMyTurnView ? "Twoja tura: wybierz litere lub nacisnij klawisz na klawiaturze." : "Czekaj na ruch przeciwnika.") + '</div><div class="multiplayer-options-grid multiplayer-keyboard-grid" data-answer-anchor>' + letterButtonsView + '</div>' + (isMyTurnView && !state.usedFullGuess && !gameOverView ? '<div class="multiplayer-full-guess"><label for="fullGuessInput">Zgadnij całość (jedna próba):</label><div class="multiplayer-full-guess-controls"><input type="text" id="fullGuessInput" maxlength="50" placeholder="Wpisz pełną nazwę bohatera..." ' + (gameOverView ? 'disabled' : '') + '><button class="action-button" type="button" id="fullGuessButton" ' + (gameOverView ? 'disabled' : '') + '>Zgadnij całość</button></div></div>' : '') + '</div>'
-          : state.status === "loading" && hangmanView
-            ? '<div class="multiplayer-question-card"><h3>Wisielec na zmiane</h3><p class="mode-description">Gracze zgaduja litery na zmiane. Bledna litera zabiera zycie, a timeout oddaje ture przeciwnikowi.</p>' + (hangmanView.imageUrl ? '<div class="multiplayer-loading-overlay"><div class="loading-content"><div class="loading-spinner"></div><h2>Przygotowuję grę...</h2><p>Ładuję obraz bohatera</p></div></div><div class="multiplayer-hero-image-wrap"><img class="multiplayer-hero-image" src="' + hangmanView.imageUrl + '" alt="' + (hangmanView.imageAlt || "Hero") + '" onload="handleImageLoad(\'' + state.roomCode + '\')" style="display:none;"></div>' : '') + '<div class="multiplayer-word-mask">' + hangmanView.maskedWord + '</div><p class="mode-meta">Uzyte litery: brak</p><div class="multiplayer-keyboard-caption">Czekaj na gotowość obu graczy...</div><div class="multiplayer-ready-section"><button class="action-button" type="button" id="playerReadyButton" ' + (state.playerReady ? 'disabled' : '') + '>' + (state.playerReady ? 'Gotowy - czekaj na przeciwnika' : 'Gotowy do gry') + '</button></div><div class="multiplayer-options-grid multiplayer-keyboard-grid" data-answer-anchor>' + "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("").map(function (letter) { return '<button class="multiplayer-key is-disabled" type="button" disabled aria-label="Litera ' + letter + '">' + letter + '</button>'; }).join("") + '</div></div>'
-            : '<div class="placeholder-menu compact-loading"><div><div class="mode-badge">Lobby</div><h2 class="mode-title">Czekamy na start meczu</h2><p>Gdy dwoch graczy bedzie online w pokoju, serwer automatycznie rozpocznie runde.</p></div></div>') +
+        gameContentHTML +
       '</section>' +
       gameOverOverlayView +
     '</div>';
@@ -3034,6 +3100,19 @@
     const playerReadyButton = container.querySelector("#playerReadyButton");
     if (playerReadyButton) {
       playerReadyButton.addEventListener("click", handlers.onPlayerReady);
+    }
+
+    // Preserve input focus and value across re-renders
+    if (state.status === "playing" && isMyTurnView && !state.usedFullGuess) {
+      setTimeout(function () {
+        const fullGuessInput = container.querySelector("#fullGuessInput");
+        if (fullGuessInput && document.activeElement !== fullGuessInput) {
+          // Focus input if player was previously typing
+          if (document.activeElement === document.body || document.activeElement === document.documentElement) {
+            fullGuessInput.focus();
+          }
+        }
+      }, 0);
     }
     return;
 
@@ -4880,7 +4959,6 @@
         onFullGuess: handleMultiplayerFullGuess,
         onPlayerReady: handlePlayerReady
       });
-      scrollGameContainerToAnswerArea();
       return;
     }
 
