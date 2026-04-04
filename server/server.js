@@ -731,9 +731,14 @@ async function startRoomIfReady(room) {
     player.playerReady = false; // Reset for new READY system
   });
   room.wordState = createHangmanState(shuffled[0], room.players);
-  room.status = "loading"; // Set status to loading - wait for players to be ready
+  room.status = "loading"; // Set status to loading
   emitRoomState(room);
-  // Wait for players to send player_ready before starting the game
+  
+  // Automatically start the game after 1 second
+  setTimeout(function () {
+    console.log(`[SERVER] Auto-starting game for room ${room.code} after loading delay`);
+    scheduleTurnTimeout(room);
+  }, 1000);
 }
 
 function startGameIfAllReady(room) {
