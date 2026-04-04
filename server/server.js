@@ -602,6 +602,12 @@ function finishRoom(room, reason, winnerId) {
     winnerId: winnerId || null
   };
   room.roundEndsAt = null;
+  
+  // Reset player ready states for potential rematch
+  room.players.forEach(function (player) {
+    player.playerReady = false;
+  });
+  
   emitRoomState(room);
   room.players.forEach(function (player) {
     if (player.socketId) {

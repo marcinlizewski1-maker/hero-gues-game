@@ -960,7 +960,15 @@
     });
 
     socket.on("multiplayer:start-game", function () {
+      console.log("[CLIENT] Received start_game event");
+      // Clear game start timeout
+      if (handlePlayerReady.gameStartTimeout) {
+        clearTimeout(handlePlayerReady.gameStartTimeout);
+        handlePlayerReady.gameStartTimeout = null;
+      }
+      
       const current = store.getState().multiplayer || {};
+      console.log(`[CLIENT] Starting game - current status: ${current.status}, room: ${current.roomCode}`);
       store.setState({
         multiplayer: Object.assign({}, current, {
           gameStarted: true
@@ -996,6 +1004,12 @@
     });
 
     socket.on("multiplayer:finished", function (roomState) {
+      // Clear game start timeout if it exists
+      if (handlePlayerReady.gameStartTimeout) {
+        clearTimeout(handlePlayerReady.gameStartTimeout);
+        handlePlayerReady.gameStartTimeout = null;
+      }
+      
       const me = roomState.me;
       const result = roomState.result || {};
       const isWinner = me && result.winnerId && me.id === result.winnerId;
@@ -1013,6 +1027,7 @@
           roundEndsAt: null,
           secondsLeft: 0,
           gameOver: true,
+          playerReady: false, // Reset for potential rematch
           message: result.reason === "disconnect"
             ? (isWinner ? "Przeciwnik sie rozlaczyl. Wygrywasz." : "Rozlaczenie zakonczylo mecz.")
             : result.reason === "word_guessed"
@@ -4240,6 +4255,8 @@
       return; // Already ready
     }
 
+    console.log(`[CLIENT] Sending player_ready for room ${multiplayer.roomCode}`);
+
     multiplayerSocket.emit("multiplayer:player-ready", {
       roomCode: multiplayer.roomCode
     });
@@ -4250,6 +4267,23 @@
         playerReady: true
       })
     });
+
+    // Set timeout for game start (10 seconds)
+    if (!handlePlayerReady.gameStartTimeout) {
+      handlePlayerReady.gameStartTimeout = setTimeout(function () {
+        const currentState = store.getState().multiplayer || {};
+        if (currentState.status === "loading") {
+          console.error("[CLIENT] Game start timeout - showing error");
+          store.setState({
+            multiplayer: Object.assign({}, currentState, {
+              message: "Błąd: Gra nie mogła się rozpocząć. Spróbuj ponownie.",
+              status: "error"
+            })
+          });
+        }
+        handlePlayerReady.gameStartTimeout = null;
+      }, 10000);
+    }
   }
 
   function handleExitMultiplayer() {
