@@ -868,6 +868,7 @@
         };
 
         const handleConnect = function () {
+          console.log('[CLIENT] Socket connected successfully');
           cleanup();
           multiplayerSocket = socket;
           bindMultiplayerSocketEvents(socket);
@@ -875,6 +876,7 @@
         };
 
         const handleConnectError = function (error) {
+          console.error('[CLIENT] Socket connection error:', error);
           cleanup();
           reject(new Error(error && error.message ? error.message : "Nie udalo sie polaczyc z multiplayerem."));
         };
@@ -900,6 +902,14 @@
     socket.off("disconnect");
 
     socket.on("multiplayer:state", function (roomState) {
+      console.log('[CLIENT] Received multiplayer:state', {
+        status: roomState.status,
+        roomCode: roomState.code,
+        playersCount: roomState.players ? roomState.players.length : 0,
+        hasHangman: !!roomState.hangman,
+        waitingForOpponent: roomState.waitingForOpponent
+      });
+      
       const previous = store.getState().multiplayer || {};
       
       const newState = Object.assign({}, previous, {
@@ -994,6 +1004,14 @@
     });
 
     socket.on("multiplayer:turn-result", function (payload) {
+      console.log('[CLIENT] Received turn-result', {
+        timeout: payload.timeout,
+        correct: payload.correct,
+        byUserId: payload.byUserId,
+        nextTurnUserId: payload.nextTurnUserId,
+        message: payload.message
+      });
+      
       const current = store.getState().multiplayer || {};
       store.setState({
         multiplayer: Object.assign({}, current, {
@@ -1004,6 +1022,13 @@
     });
 
     socket.on("multiplayer:finished", function (roomState) {
+      console.log('[CLIENT] Received finished', {
+        status: roomState.status,
+        roomCode: roomState.code,
+        result: roomState.result,
+        playersCount: roomState.players ? roomState.players.length : 0
+      });
+      
       // Clear game start timeout if it exists
       if (handlePlayerReady.gameStartTimeout) {
         clearTimeout(handlePlayerReady.gameStartTimeout);
@@ -1073,6 +1098,7 @@
     });
 
     socket.on("multiplayer:error", function (payload) {
+      console.error('[CLIENT] Received multiplayer error:', payload);
       const current = store.getState().multiplayer || {};
       store.setState({
         multiplayer: Object.assign({}, current, {
@@ -4247,11 +4273,24 @@
     const state = store.getState();
     const multiplayer = state.multiplayer || {};
 
+    console.log('[CLIENT] handlePlayerReady called', {
+      hasSocket: !!multiplayerSocket,
+      roomCode: multiplayer.roomCode,
+      status: multiplayer.status,
+      playerReady: multiplayer.playerReady
+    });
+
     if (!multiplayerSocket || !multiplayer.roomCode || multiplayer.status !== "loading") {
+      console.log('[CLIENT] handlePlayerReady blocked - conditions not met', {
+        hasSocket: !!multiplayerSocket,
+        roomCode: multiplayer.roomCode,
+        status: multiplayer.status
+      });
       return;
     }
 
     if (multiplayer.playerReady) {
+      console.log('[CLIENT] handlePlayerReady blocked - already ready');
       return; // Already ready
     }
 
@@ -4270,6 +4309,7 @@
 
     // Set timeout for game start (10 seconds)
     if (!handlePlayerReady.gameStartTimeout) {
+      console.log('[CLIENT] Setting game start timeout (10s)');
       handlePlayerReady.gameStartTimeout = setTimeout(function () {
         const currentState = store.getState().multiplayer || {};
         if (currentState.status === "loading") {

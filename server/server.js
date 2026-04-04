@@ -737,7 +737,10 @@ async function startRoomIfReady(room) {
 }
 
 function startGameIfAllReady(room) {
+  console.log(`[SERVER] Checking if game can start for room ${room.code} - status: ${room.status}`);
+  
   if (room.status !== "loading") {
+    console.log(`[SERVER] Room ${room.code} not in loading state, cannot start game`);
     return;
   }
 
@@ -745,11 +748,14 @@ function startGameIfAllReady(room) {
     return player.ready;
   });
 
+  console.log(`[SERVER] Room ${room.code} all players ready: ${allReady} (${room.players.map(p => `${p.nickname}: ${p.ready}`).join(', ')})`);
+
   if (!allReady) {
     return;
   }
 
   // All players are ready, start the game
+  console.log(`[SERVER] Starting game for room ${room.code}`);
   room.status = "playing";
   io.to(room.code).emit("multiplayer:start-game");
   scheduleTurnTimeout(room);
@@ -1189,9 +1195,12 @@ io.on("connection", function (socket) {
 
   socket.on("multiplayer:join-room", function (payload) {
     const roomCode = String(payload && payload.roomCode || "").trim().toUpperCase();
+    console.log(`[SERVER] User ${userId} attempting to join room ${roomCode}`);
+    
     const room = multiplayerRooms.get(roomCode);
 
     if (!room) {
+      console.log(`[SERVER] Room ${roomCode} not found`);
       socket.emit("multiplayer:error", { error: "Nie znaleziono pokoju o takim kodzie." });
       return;
     }
@@ -1201,10 +1210,12 @@ io.on("connection", function (socket) {
     });
 
     if (!player) {
+      console.log(`[SERVER] User ${userId} not in room ${roomCode} players: ${room.players.map(p => p.userId).join(', ')}`);
       socket.emit("multiplayer:error", { error: "Nie nalezysz do tego pokoju." });
       return;
     }
 
+    console.log(`[SERVER] User ${userId} joining room ${roomCode} - room has ${room.players.length} players`);
     socket.join(room.code);
     player.socketId = socket.id;
     player.connected = true;
@@ -1237,9 +1248,12 @@ io.on("connection", function (socket) {
 
   socket.on("multiplayer:player-ready", function (payload) {
     const roomCode = String(payload && payload.roomCode || "").trim().toUpperCase();
+    console.log(`[SERVER] User ${userId} sent player-ready for room ${roomCode}`);
+    
     const room = multiplayerRooms.get(roomCode);
 
     if (!room) {
+      console.log(`[SERVER] Room ${roomCode} not found for player-ready`);
       socket.emit("multiplayer:error", { error: "Nie znaleziono pokoju o takim kodzie." });
       return;
     }
@@ -1249,6 +1263,7 @@ io.on("connection", function (socket) {
     });
 
     if (!player) {
+      console.log(`[SERVER] User ${userId} not in room ${roomCode} for player-ready`);
       socket.emit("multiplayer:error", { error: "Nie nalezysz do tego pokoju." });
       return;
     }
