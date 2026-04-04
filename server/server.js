@@ -1247,6 +1247,8 @@ io.on("connection", function (socket) {
       return;
     }
 
+    console.log(`[SERVER] Player ${player.nickname} (${userId}) sent player_ready for room ${roomCode}`);
+
     // Set player as ready for the new READY system
     player.playerReady = true;
     emitRoomState(room);
@@ -1256,7 +1258,10 @@ io.on("connection", function (socket) {
       return p.playerReady;
     });
 
-    if (allPlayersReady && room.status === "playing") {
+    console.log(`[SERVER] Room ${roomCode} ready status: ${allPlayersReady ? 'ALL READY' : 'WAITING'} (${room.players.map(p => `${p.nickname}: ${p.playerReady}`).join(', ')})`);
+
+    if (allPlayersReady && room.status === "loading") {
+      console.log(`[SERVER] Starting game for room ${roomCode}`);
       // Both players are ready, start the game
       io.to(room.code).emit("multiplayer:start-game");
       scheduleTurnTimeout(room);
